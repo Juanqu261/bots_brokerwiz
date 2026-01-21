@@ -1,16 +1,18 @@
 version: '3.9'
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: broker_wiz_redis
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: broker_wiz_mqtt
     ports:
-      - "6379:6379"
+      - "1883:1883"
+      - "9001:9001"
     volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$SYS/broker/clients/connected", "-E"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -21,7 +23,7 @@ services:
     build: .
     container_name: broker_wiz_app
     depends_on:
-      redis:
+      mosquitto:
         condition: service_healthy
     ports:
       - "8000:8000"    # API
@@ -29,11 +31,15 @@ services:
     environment:
       - ENVIRONMENT=development
       - DEBUG=True
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_CLIENT_ID=broker-wiz-api
+      - MQTT_QOS=1
+      - MQTT_TOPIC_PREFIX=bots
       - API_PORT=8000
       - NUM_WORKERS=3
-      - APP_WEB_BASE_URL=http://host.docker.internal:3000  # macOS/Windows para acceder a localhost del host
+      - WORKER_POLL_INTERVAL=1
+      - APP_WEB_BASE_URL=http://host.docker.internal:3000
       - LOG_LEVEL=INFO
     volumes:
       - ./:/app
@@ -48,22 +54,10 @@ services:
       retries: 3
       start_period: 10s
 
-  # Opcional: RQ Dashboard (monitoreo de tasks)
-  rq-dashboard:
-    image: eoranged/rq-dashboard:latest
-    container_name: broker_wiz_rq_dashboard
-    depends_on:
-      - redis
-    ports:
-      - "9181:9181"
-    environment:
-      - RQ_REDIS_HOST=redis
-      - RQ_REDIS_PORT=6379
-    networks:
-      - broker_wiz_network
 
 volumes:
-  redis_data:
+  mosquitto_data:
+  mosquitto_logs:
 
 networks:
   broker_wiz_network:

@@ -17,17 +17,15 @@ echo "Iniciando API (FastAPI)..."
 uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT:-8000} &
 API_PID=$!
 
-echo "Iniciando Workers (RQ)..."
+echo "Iniciando Workers (MQTT)..."
 for i in $(seq 1 ${NUM_WORKERS:-3}); do
-    rq worker default -c config.settings &
+    python -m workers.mqtt_worker &
     echo "  Worker $i iniciado"
 done
 
 echo "Sistema completo iniciado"
 echo "   API: http://localhost:${API_PORT:-8000}"
-echo "   Métricas: http://localhost:${PROMETHEUS_PORT:-8001}/metrics"
-echo "   Admin: http://localhost:${API_PORT:-8000}/admin/ui"
-echo "   RQ Dashboard: http://localhost:9181"
+echo "   MQTT: mosquitto:1883"
 
 # Esperar a que la app se termine
 wait $API_PID

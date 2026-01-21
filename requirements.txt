@@ -4,10 +4,8 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# Task Queue
-redis==5.0.1
-rq==1.14.1
-rq-dashboard==0.14.1
+# Message Broker (MQTT)
+paho-mqtt==1.6.1
 
 # Browser Automation
 selenium==4.15.2
@@ -19,10 +17,6 @@ requests==2.31.0
 
 # Retry Logic
 tenacity==8.2.3
-
-# Logging & Monitoring
-python-json-logger==2.0.7
-prometheus-client==0.18.0
 
 # PDF/Document handling (si aplica)
 # pypdf==3.17.1
