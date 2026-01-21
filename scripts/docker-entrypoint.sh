@@ -14,12 +14,12 @@ if [ -f .env ]; then
 fi
 
 echo "Iniciando API (FastAPI)..."
-python -m app.main &
+uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT:-8000} &
 API_PID=$!
 
 echo "Iniciando Workers (RQ)..."
 for i in $(seq 1 ${NUM_WORKERS:-3}); do
-    rq worker -c config.settings &
+    rq worker default -c config.settings &
     echo "  Worker $i iniciado"
 done
 

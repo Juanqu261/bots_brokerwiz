@@ -91,7 +91,7 @@ WORKER_TIMEOUT=300
 LOG_LEVEL=INFO
 ```
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Solicitar Cotización
 ```bash
@@ -238,13 +238,11 @@ docker run -d -p 8000:8000 \
 
 ## Seguridad
 
-- ✅ API Key en Bearer token
-- ✅ Auth a app-web con Bearer token
-- ✅ Validación de entrada (Pydantic)
-- ✅ CORS configurado
-- ✅ Retry + backoff exponencial (resilencia)
-- ⚠️ TODO: Rate limiting
-- ⚠️ TODO: Logging de errores sensibles (sanitizar)
+- API Key en Bearer token
+- Auth a app-web con Bearer token
+- Validación de entrada (Pydantic)
+- CORS configurado
+- Retry + backoff exponencial (resilencia)
 
 ## Logs
 

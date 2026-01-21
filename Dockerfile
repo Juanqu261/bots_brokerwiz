@@ -45,6 +45,9 @@ COPY . .
 # Crear directorios necesarios
 RUN mkdir -p logs storage
 
+# Hacer el script ejecutable
+RUN chmod +x /app/scripts/docker-entrypoint.sh
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
@@ -53,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 8000 8001
 
 # Comando por defecto (ejecutar app + workers)
-CMD ["/app/docker-entrypoint.sh"]
+CMD ["/app/scripts/docker-entrypoint.sh"]
