@@ -1,0 +1,70 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: broker_wiz_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - broker_wiz_network
+
+  app:
+    build: .
+    container_name: broker_wiz_app
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"    # API
+      - "8001:8001"    # Prometheus metrics
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_PORT=8000
+      - NUM_WORKERS=3
+      - APP_WEB_BASE_URL=http://host.docker.internal:3000  # macOS/Windows para acceder a localhost del host
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+      - ./storage:/app/storage
+    networks:
+      - broker_wiz_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Opcional: RQ Dashboard (monitoreo de tasks)
+  rq-dashboard:
+    image: eoranged/rq-dashboard:latest
+    container_name: broker_wiz_rq_dashboard
+    depends_on:
+      - redis
+    ports:
+      - "9181:9181"
+    environment:
+      - RQ_REDIS_HOST=redis
+      - RQ_REDIS_PORT=6379
+    networks:
+      - broker_wiz_network
+
+volumes:
+  redis_data:
+
+networks:
+  broker_wiz_network:
+    driver: bridge
