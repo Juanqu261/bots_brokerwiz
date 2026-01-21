@@ -93,17 +93,7 @@ class MQTTSettings(BaseSettings):
     @property
     def MQTT_QUEUE_TOPIC(self) -> str:
         """Topic para cola de jobs"""
-        return f"{self.MQTT_TOPIC_PREFIX}/queue/default"
-    
-    @property
-    def MQTT_RESULTS_TOPIC(self) -> str:
-        """Topic para resultados"""
-        return f"{self.MQTT_TOPIC_PREFIX}/results"
-    
-    @property
-    def MQTT_LOGS_TOPIC(self) -> str:
-        """Topic para logs"""
-        return f"{self.MQTT_TOPIC_PREFIX}/logs"
+        return f"{self.MQTT_TOPIC_PREFIX}/queue"
     
     class Config:
         env_file = ".env"
@@ -124,14 +114,6 @@ class WorkersSettings(BaseSettings):
     WORKER_POLL_INTERVAL: int = Field(
         default=1,
         description="Intervalo en segundos para polling de MQTT"
-    )
-    MAX_RETRIES: int = Field(
-        default=3,
-        description="Maximo numero de reintentos en caso de fallo"
-    )
-    RETRY_BACKOFF: int = Field(
-        default=2,
-        description="Factor de espera exponencial para reintentos (segundos)"
     )
     
     class Config:
@@ -413,7 +395,7 @@ settings = get_settings()
 
 
 """
-# Opcion 1: Acceso directo (mas comun)
+# Opcion 1: Acceso directo
 from config.settings import settings
 
 host = settings.API_HOST
@@ -426,10 +408,8 @@ from config.settings import settings
 redis_host = settings.redis.REDIS_HOST
 chrome_args = settings.selenium.SELENIUM_CHROME_ARGS
 
-# Opcion 3: Via funcion (para dependency injection)
+# Opcion 3: Via funcion
 from config.settings import get_settings
 
-def setup_redis():
-    settings = get_settings()
-    return Redis.from_url(settings.REDIS_URL)
+settings = get_settings()
 """

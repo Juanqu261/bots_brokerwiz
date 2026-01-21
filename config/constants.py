@@ -1,6 +1,12 @@
 from enum import Enum
 
 
+class MQTTTopics(str, Enum):
+    """Topics MQTT disponibles"""
+    
+    QUEUE = "bots/queue"
+
+
 class Aseguradora(str, Enum):
     """Listado de aseguradoras soportadas"""
     
@@ -74,7 +80,7 @@ BOT_MAPPING = {
 # Codigos de error
 
 class ErrorCode(str, Enum):
-    """CCodigos de error estandarizados"""
+    """Codigos de error estandarizados"""
     
     INVALID_ASEGURADORA = "INVALID_ASEGURADORA"
     JOB_NOT_FOUND = "JOB_NOT_FOUND"
@@ -82,7 +88,15 @@ class ErrorCode(str, Enum):
     BOT_TIMEOUT = "BOT_TIMEOUT"
     BOT_FAILED = "BOT_FAILED"
     PDF_UPLOAD_FAILED = "PDF_UPLOAD_FAILED"
-    REDIS_CONNECTION_FAILED = "REDIS_CONNECTION_FAILED"
+    MQTT_CONNECTION_FAILED = "MQTT_CONNECTION_FAILED"
+    SELENIUM_TIMEOUT = "SELENIUM_TIMEOUT"
+    SELENIUM_ELEMENT_NOT_FOUND = "SELENIUM_ELEMENT_NOT_FOUND"
+    SELENIUM_NAVIGATION_FAILED = "SELENIUM_NAVIGATION_FAILED"
+    LOGIN_FAILED = "LOGIN_FAILED"
+    QUOTE_EXTRACTION_FAILED = "QUOTE_EXTRACTION_FAILED"
+    PDF_GENERATION_FAILED = "PDF_GENERATION_FAILED"
+    NETWORK_ERROR = "NETWORK_ERROR"
+    UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 
 # Mensajes de error
@@ -94,5 +108,13 @@ ERROR_MESSAGES = {
     ErrorCode.BOT_TIMEOUT: "El bot excedió el tiempo máximo de ejecución",
     ErrorCode.BOT_FAILED: "El bot falló durante la ejecución",
     ErrorCode.PDF_UPLOAD_FAILED: "Falló al enviar el PDF a app-web",
-    ErrorCode.REDIS_CONNECTION_FAILED: "No se pudo conectar a Redis",
+    ErrorCode.MQTT_CONNECTION_FAILED: "No se pudo conectar al broker MQTT",
+    ErrorCode.SELENIUM_TIMEOUT: "Timeout en carga de página Selenium",
+    ErrorCode.SELENIUM_ELEMENT_NOT_FOUND: "Elemento no encontrado en la página",
+    ErrorCode.SELENIUM_NAVIGATION_FAILED: "Fallo en navegación a URL",
+    ErrorCode.LOGIN_FAILED: "Credenciales inválidas o cambio en UI",
+    ErrorCode.QUOTE_EXTRACTION_FAILED: "No se pudo extraer la cotización",
+    ErrorCode.PDF_GENERATION_FAILED: "Error generando PDF",
+    ErrorCode.NETWORK_ERROR: "Error de conexión de red",
+    ErrorCode.UNKNOWN_ERROR: "Error desconocido",
 }
