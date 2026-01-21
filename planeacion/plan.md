@@ -1,41 +1,33 @@
-# Plan de Implementación: Servidor de Bots Selenium con API y Queue
+# Plan de Implementacion: Servidor de Bots Selenium con API y Queue
 
-## Visión General
+## Vision General
 
-Crear un servidor modular de automatización con bots Selenium orchestrados por una API REST + cola de tareas (RQ), todo containerizado para fácil escalabilidad. La arquitectura separa API y workers en procesos independientes, permitiendo crecer desde 2 bots concurrentes a 10+ sin cambios de código. **Los PDFs generados por los bots se envían directamente a un endpoint de la app web existente para almacenamiento.**
+Crear un servidor modular de automatizacion con bots Selenium orchestrados por una API REST + cola de tareas (RQ), todo containerizado para fácil escalabilidad. La arquitectura separa API y workers en procesos independientes, permitiendo crecer desde 2 bots concurrentes a 10+ sin cambios de codigo. **Los PDFs generados por los bots se envian directamente a un endpoint de la app web existente para almacenamiento.**
 
 ---
 
-## 1. Stack Técnico Recomendado
+## 1. Stack Tecnico
 
 ### Lenguaje y Runtime
-- **Python 3.12.x** para producción (balance estabilidad/rendimiento)
-- Razones: Estable en producción, optimizaciones adaptativas, mejor que 3.11, sin edge cases experimentales de 3.13
+- **Python 3.12.x**
 
 ### Cola de Tareas
 - **RQ (Redis Queue)** como gestor de tareas
-- Razones: Balance perfecto simpleza vs poder, escalable de 2-10 bots, fácil debugging, posibilidad de migrar a Celery después
 
-### Orquestación de Procesos
+### Orquestacion de Procesos
 - **Multiprocessing + FastAPI**
 - API en proceso principal (FastAPI)
 - N workers en procesos separados (RQ workers)
 - Resilencia: Si un worker falla, no afecta API
 
-### Containerización
+### Containerizacion
 - **Single-container MVP**: API + Redis + 2 workers en scripts/start_all.py
-- **Multi-container Producción** (future): Docker Compose con réplicas de workers (3+ containers independientes)
+- **Multi-container Produccion** (future): Docker Compose con replicas de workers (3+ containers independientes)
 - Base: Python 3.12-slim + Chromium + ChromeDriver
-
-### Almacenamiento de PDFs
-- **NO localmente**: Los PDFs se generan en temp/memory dentro del bot
-- **Envío a App Web**: Se envían vía POST a endpoint existente `POST /archivos-cotizacion` de la app web
-- **Eliminación**: PDFs temp se limpian después del envío exitoso
-- **Simplificación**: Se elimina S3, volúmenes persistentes, y complejidad de storage
 
 ---
 
-## 2. Arquitectura de la Solución
+## 2. Arquitectura de la Solucion
 
 ### Componentes Principales
 
@@ -56,29 +48,28 @@ Crear un servidor modular de automatización con bots Selenium orchestrados por 
 │                                                         │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │    /app/storage/temp (Temporal PDF Memory)       │   │
-│  │    (Limpiar después de envío exitoso)            │   │
+│  │    (Limpiar despues de envio exitoso)            │   │
 │  └──────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
-         ↑                                           ↑
+         ↑                                           │
          │ POST /api/{aseguradora}/cotizar           │
          │ GET /api/jobs/{id}/status                 │ PDFs enviados a
-         │                                           │ app web vía
-      (App Web)                                      │ /archivos-cotizacion
-         ←─ webhook notificación job completado      │
-                                          (App Web POST)
+         │                                           │ app web via
+      (App Web)                       <--------------│ /archivos-cotizacion
+
 ```
 
-### Flujo de Ejecución
+### Flujo de Ejecucion
 
-1. **App Web** → POST `/api/hdi/cotizar` con payload de cotización
+1. **App Web** → POST `/api/hdi/cotizar` con payload de cotizacion
 2. **FastAPI** → Valida, mapea payload, encola job en Redis
 3. **RQ** → Devuelve `job_id` inmediatamente
 4. **Worker** → Obtiene job de cola, ejecuta bot Selenium HDI
 5. **Bot** → Login → Navega → Extrae datos → Genera PDF (en memoria)
 6. **PDFs** → Se genera en `/tmp` o BytesIO
-7. **Envío** → Bot llama `POST /archivos-cotizacion` de app web con PDF
+7. **Envio** → Bot llama `POST /archivos-cotizacion` de app web con PDF
 8. **App Web** → Recibe y almacena PDF (responsabilidad de app web)
-9. **Cleanup** → Bot elimina PDF temp después de envío exitoso
+9. **Cleanup** → Bot elimina PDF temp despues de envio exitoso
 10. **App Web** → GET `/api/jobs/{job_id}/status` (polling) o webhook para saber que está listo
 
 ---
@@ -91,7 +82,7 @@ bots_brokerWiz/
 │   ├── __init__.py
 │   ├── main.py                          # App principal, startup/shutdown
 │   ├── config.py                        # Alias para settings
-│   ├── dependencies.py                  # Inyección de dependencias
+│   ├── dependencies.py                  # Inyeccion de dependencias
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── quote.py                     # Pydantic: QuoteRequest, QuoteResponse
@@ -110,7 +101,7 @@ bots_brokerWiz/
 │   │   └── asegurador_mapper.py         # Mapeos de payload por aseguradora
 │   └── middleware/
 │       ├── __init__.py
-│       ├── auth.py                      # Validación API Key
+│       ├── auth.py                      # Validacion API Key
 │       └── logging.py                   # Request/response logging
 │
 ├── workers/                             # Procesos RQ + Bots Selenium
@@ -127,7 +118,7 @@ bots_brokerWiz/
 │   │   ├── equidad_bot.py               # Bot EQUIDAD
 │   │   ├── mundial_bot.py               # Bot MUNDIAL
 │   │   ├── allianz_bot.py               # Bot ALLIANZ
-│   │   ├── bolivar_bot.py               # Bot BOLÍVAR
+│   │   ├── bolivar_bot.py               # Bot BOLiVAR
 │   │   ├── sbs_bot.py                   # Bot SBS
 │   │   ├── payload_mappers.py           # Mapeos por aseguradora
 │   │   └── pdf_uploader.py              # Servicio para enviar PDFs a app web
@@ -142,7 +133,7 @@ bots_brokerWiz/
 │   ├── __init__.py
 │   ├── settings.py                      # Pydantic Settings (env vars)
 │   ├── logging_config.py                # Setup logging (console + file)
-│   └── redis_config.py                  # Configuración de Redis
+│   └── redis_config.py                  # Configuracion de Redis
 │
 ├── storage/                             # Volumen Docker (gitignored)
 │   └── screenshots/                     # Debug screenshots solamente
@@ -167,9 +158,9 @@ bots_brokerWiz/
 │   └── init_project.py                  # Inicializar (crear dirs, etc)
 │
 ├── docs/
-│   ├── API.md                           # Documentación de endpoints
-│   ├── BOTS.md                          # Guía para crear bots
-│   ├── ARCHITECTURE.md                  # Diagrama técnico
+│   ├── API.md                           # Documentacion de endpoints
+│   ├── BOTS.md                          # Guia para crear bots
+│   ├── ARCHITECTURE.md                  # Diagrama tecnico
 │   └── DEPLOYMENT.md                    # Instrucciones Docker
 │
 ├── .env.example                         # Template variables de entorno
@@ -243,11 +234,9 @@ mkdocs==1.5.3
 ipdb==0.13.13
 ```
 
-**Nota importante**: Sin S3 (boto3), sin almacenamiento persistente, sin dependencias de storage cloud.
-
 ---
 
-## 5. Configuración Centralizada
+## 5. Configuracion Centralizada
 
 ### config/settings.py (Resumen)
 
@@ -306,7 +295,7 @@ class Settings(BaseSettings):
     
     # Jobs
     JOB_RESULT_TTL: int = 86400  # 24 horas
-    JOB_FAILURE_TTL: int = 604800  # 7 días
+    JOB_FAILURE_TTL: int = 604800  # 7 dias
     
     class Config:
         env_file = ".env"
@@ -343,14 +332,14 @@ class BaseBot(ABC):
     
     def setup_driver(self):
         """Inicializa ChromeDriver"""
-        # Lógica común de inicialización
+        # Logica común de inicializacion
     
     def cleanup_driver(self):
         """Limpia recursos"""
-        # Lógica común de limpieza
+        # Logica común de limpieza
     
     def execute(self) -> Dict[str, Any]:
-        """Orquesta ejecución (Template Method)"""
+        """Orquesta ejecucion (Template Method)"""
         try:
             self.setup_driver()
             self._login()
@@ -381,7 +370,7 @@ class BaseBot(ABC):
         finally:
             self.cleanup_driver()
     
-    # Métodos abstract que cada bot implementa
+    # Metodos abstract que cada bot implementa
     @abstractmethod
     def _login(self):
         pass
@@ -399,7 +388,7 @@ class BaseBot(ABC):
         """Genera PDF y lo almacena en self.pdf_bytes"""
         pass
     
-    # Métodos helper compartidos
+    # Metodos helper compartidos
     def wait_and_click(self, locator):
         """Helper para esperar y clickear"""
         pass
@@ -413,7 +402,7 @@ class BaseBot(ABC):
         pass
 ```
 
-### workers/bots/pdf_uploader.py (Nuevo)
+### workers/bots/pdf_uploader.py
 
 ```python
 import httpx
@@ -425,7 +414,7 @@ logger = logging.getLogger(__name__)
 def upload_pdf_to_app_web(pdf_bytes: bytes, solicitud_aseguradora_id: str,
                           aseguradora: str, job_id: str) -> dict:
     """
-    Envía PDF generado por bot a endpoint de app web
+    Envia PDF generado por bot a endpoint de app web
     
     POST {APP_WEB_BASE_URL}/archivos-cotizacion
     Content-Type: multipart/form-data
@@ -463,26 +452,26 @@ def upload_pdf_to_app_web(pdf_bytes: bytes, solicitud_aseguradora_id: str,
 ## 7. API REST Endpoints
 
 ### POST /api/{aseguradora}/cotizar
-- **Request**: JSON payload con datos del vehículo y solicitante
+- **Request**: JSON payload con datos del vehiculo y solicitante
 - **Response**: `{"job_id": "abc123", "status": "queued", "status_url": "/api/jobs/abc123"}`
-- **Acción**: Encola task en RQ
+- **Accion**: Encola task en RQ
 
 ### GET /api/jobs/{job_id}
 - **Response**: `{"job_id": "abc123", "status": "queued|processing|completed|failed", "result": {...}, "error": "..."`
-- **Acción**: Retorna estado y resultado si completó
-- **Nota**: Si completó exitosamente, `result` incluye `uploaded_file_id` del PDF en app web
+- **Accion**: Retorna estado y resultado si completo
+- **Nota**: Si completo exitosamente, `result` incluye `uploaded_file_id` del PDF en app web
 
 ### GET /health
 - **Response**: `{"status": "healthy", "redis": "connected", "workers": 2}`
-- **Acción**: Liveness check para Kubernetes/orchestration
+- **Accion**: Liveness check para Kubernetes/orchestration
 
 ### DELETE /api/jobs/{job_id}
 - **Response**: `{"status": "cancelled"}`
-- **Acción**: Cancela job si está queued
+- **Accion**: Cancela job si está queued
 
 ---
 
-## 8. Containerización
+## 8. Containerizacion
 
 ### Dockerfile (Single-Container MVP)
 
@@ -606,11 +595,11 @@ PAYLOAD_MAPPERS = {
 
 def map_payload(aseguradora: str, context: dict) -> dict:
     """
-    Mapea desde QuoteContext a payload específico de aseguradora
+    Mapea desde QuoteContext a payload especifico de aseguradora
     Ejemplo: {"in_strIDSolicitudAseguradora": "abc123", ...}
     """
     mapper = PAYLOAD_MAPPERS.get(aseguradora.lower())
-    # Lógica de mapeo con validación
+    # Logica de mapeo con validacion
     return mapped_payload
 ```
 
@@ -623,7 +612,7 @@ def map_payload(aseguradora: str, context: dict) -> dict:
 - **Console**: INFO+ (legible)
 - **app.log**: DEBUG+ (detalle completo, 10MB rotating, 5 backups)
 - **errors.log**: ERROR+ (solo errores, separado para alertas)
-- **bots.log**: DEBUG (bot-specific, rotación separada)
+- **bots.log**: DEBUG (bot-specific, rotacion separada)
 
 ### Formato
 ```
@@ -662,7 +651,7 @@ def health_check():
 
 3. **Dead Letter Queue**
    - Jobs que fallan tras 3 reintentos → Logs en `errors.log`
-   - Webhook notificación (opcional) a app web
+   - Webhook notificacion (opcional) a app web
 
 ### workers/tasks.py
 
@@ -683,101 +672,18 @@ def execute_bot_with_retry(aseguradora: str, payload: dict,
 
 ---
 
-## 12. Plan de Implementación por Fases
+## 12. Admin Dashboard & Monitoring
 
-### Fase 1: Setup & Scaffolding (Semana 1)
-- [ ] Crear estructura de carpetas
-- [ ] Configurar Python 3.12 + requirements.txt
-- [ ] Implementar `config/settings.py` y logging
-- [ ] Crear Dockerfile MVP + docker-compose.yml
-- [ ] Validar que container inicia sin errores
-
-### Fase 2: API REST (Semana 1-2)
-- [ ] Implementar FastAPI app.main
-- [ ] Crear endpoints POST /api/{aseguradora}/cotizar
-- [ ] Crear endpoints GET /api/jobs/{id}, /api/jobs/{id}/status
-- [ ] Implementar autenticación API Key (middleware)
-- [ ] Crear GET /health para health checks
-- [ ] Tests unitarios para endpoints
-
-### Fase 3: Framework de Bots (Semana 2-3)
-- [ ] Implementar `workers/bots/base_bot.py` (clase base)
-- [ ] Implementar `workers/bots/payload_mappers.py`
-- [ ] Implementar `workers/bots/pdf_uploader.py` (envío a app web)
-- [ ] Crear bot concreto: HDI (como template)
-- [ ] Validar bot HDI contra sitio real (manual testing)
-- [ ] Crear otros bots (clonar HDI y adaptar selectores)
-
-### Fase 4: Queue & Workers (Semana 3)
-- [ ] Configurar Redis en container
-- [ ] Implementar `workers/start_rq_worker.py`
-- [ ] Implementar `workers/tasks.py` (execute_bot_with_retry)
-- [ ] Validar que jobs se encolan y ejecutan
-- [ ] Implementar retry logic con backoff
-
-### Fase 5: Integración con App Web (Semana 4)
-- [ ] Validar endpoint POST /archivos-cotizacion de app web
-- [ ] Implementar envío de PDFs desde bots
-- [ ] Tests de integración (API → Worker → App Web)
-- [ ] Manejo de errores en upload (reintentos)
-- [ ] Limpieza de PDFs temp después de envío
-
-### Fase 6: Testing & Polish (Semana 4-5)
-- [ ] Tests end-to-end (API → Worker → PDF upload)
-- [ ] Performance testing (N jobs simultáneos)
-- [ ] Error scenarios (network failures, timeouts, etc.)
-- [ ] Documentation (API.md, BOTS.md, DEPLOYMENT.md)
-- [ ] Setup CI/CD (GitHub Actions o similar)
-
-### Fase 7: Producción & Scalabilidad (Semana 5+)
-- [ ] Docker multi-stage build optimization
-- [ ] docker-compose.prod.yml (multi-container)
-- [ ] Kubernetes manifests (opcional)
-- [ ] Webhook notifications (opcional)
-- [ ] Monitoring y alertas
-
----
-
-## 13. Decisiones Finales Respondidas
-
-### Respuestas a Preguntas de Refinamiento
-
-1. **¿Webhooks de notificación?** → **NO**
-   - Polling simple via GET `/api/jobs/{id}`
-   - Reducción de complejidad
-
-2. **¿API Key para app web?** → **SÍ**
-   - Implementar `APP_WEB_API_KEY` en settings
-   - Header `Authorization: Bearer {API_KEY}` en POST a `/archivos-cotizacion`
-   - Configurar en `.env` antes de deploy
-
-3. **¿Reintentos en upload de PDF?** → **SÍ**
-   - Implementar con `@retry` decorator (librería `tenacity`)
-   - Backoff exponencial: 2s → 4s → 8s (máx 3 intentos)
-   - Configurable via `APP_WEB_PDF_UPLOAD_RETRIES` en settings
-
-4. **¿Validar que app web esté up antes de encolar?** → **NO**
-   - No validar uptime previo (add complexity)
-   - Aceptar jobs siempre, reintentos en upload si falla
-
-5. **¿Persistencia de jobs?** → **NO (por ahora)**
-   - Solo Redis ephemeral (pierde en reboot)
-   - Si en future necesitan, agregar PostgreSQL
-
----
-
-## 14. Admin Dashboard & Monitoring
-
-### Visión General
+### Vision General
 
 Dashboard web en vivo para visualizar:
-- ✅ Estado de Redis y workers
-- ✅ Jobs encolados, procesándose, completados, fallidos
-- ✅ Estadísticas por aseguradora
-- ✅ Logs en tiempo real
-- ✅ Métricas Prometheus-compatible
+- Estado de Redis y workers
+- Jobs encolados, procesándose, completados, fallidos
+- Estadisticas por aseguradora
+- Logs en tiempo real
+- Metricas Prometheus-compatible
 
-### Librerías de Monitoreo
+### Librerias de Monitoreo
 
 #### En requirements.txt
 ```
@@ -788,7 +694,7 @@ prometheus-client==0.19.0
 #### Stack Admin
 - **Backend**: FastAPI endpoints en `/admin/*`
 - **Frontend**: HTML/JS simple (SPA embebida, sin Node.js)
-- **Métricas**: Prometheus client para scraping
+- **Metricas**: Prometheus client para scraping
 - **Real-time**: Server-sent events (SSE) para logs live
 
 ### Estructura de Archivos Nuevos
@@ -807,18 +713,6 @@ app/
 └── ...
 ```
 
----
-
-## 15. Admin Dashboard & Monitoring
-
-### Propósito
-Visibilidad en tiempo real del sistema:
-- Tareas en cola
-- Bots ejecutándose
-- Salud del sistema (Redis, workers)
-- Logs en streaming
-- Métricas Prometheus
-
 ### Arquitectura
 
 #### A. Servicio de Monitoreo (`services/monitoring.py`)
@@ -834,7 +728,7 @@ class MonitoringService:
         self.redis = redis_client
     
     def get_redis_info(self) -> Dict[str, Any]:
-        """Información de Redis"""
+        """Informacion de Redis"""
         info = self.redis.info()
         return {
             "memory_mb": info.get("used_memory") / 1024 / 1024,
@@ -960,7 +854,7 @@ async def dashboard_data(monitoring: MonitoringService = Depends(get_monitoring)
 
 @router.get("/metrics", dependencies=[Depends(verify_api_key)])
 async def metrics(monitoring: MonitoringService = Depends(get_monitoring)):
-    """GET /admin/metrics - Métricas en formato Prometheus"""
+    """GET /admin/metrics - Metricas en formato Prometheus"""
     from prometheus_client import generate_latest
     return StreamingResponse(
         iter([generate_latest()]),
@@ -1025,7 +919,7 @@ async def dashboard_ui():
     <div class="container">
         <header>
             <h1>🤖 BrokerWiz Bot Admin Dashboard</h1>
-            <p>Monitoreo en tiempo real | Última actualización: <span id="last-update">--:--:--</span></p>
+            <p>Monitoreo en tiempo real | Última actualizacion: <span id="last-update">--:--:--</span></p>
         </header>
 
         <div class="grid">
@@ -1114,7 +1008,7 @@ async def dashboard_ui():
                         </div>`
                     ).join("");
                 } else {
-                    botsList.innerHTML = "<em>Ningún bot en ejecución</em>";
+                    botsList.innerHTML = "<em>Ningún bot en ejecucion</em>";
                 }
                 
                 document.getElementById("last-update").innerText = new Date().toLocaleTimeString();
@@ -1153,13 +1047,9 @@ async def dashboard_ui():
 </html>
 ```
 
-### Librerías de Monitoreo
 
-```
-prometheus-client==0.18.0     # Métricas
-```
 
-### Integración en Settings
+### Integracion en Settings
 
 ```python
 # config/settings.py
@@ -1176,15 +1066,15 @@ class Settings(BaseSettings):
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Eventos en Sistema (jobs, workers, etc)       │
+│  Eventos en Sistema (jobs, workers, etc)        │
 └──────────────┬──────────────────────────────────┘
                │
        ┌───────┴────────┐
        │                │
-   ┌───▼────┐      ┌───▼────┐
+   ┌───▼────┐      ┌─── ▼────┐
    │ Redis  │      │Prometheus
    │  Logs  │      │ Metrics
-   └───┬────┘      └───┬────┘
+   └───┬────┘      └─── ┬────┘
        │                │
    ┌───▼─────────────────▼───┐
    │  Dashboard HTML + JS    │
@@ -1194,50 +1084,13 @@ class Settings(BaseSettings):
 
 ---
 
-## 15. Endpoints Admin/Monitoreo (Detallado)
-
-## 14. Decisiones Finales - Preguntas de Refinamiento
-
-✅ **CONFIRMADAS POR EL USUARIO:**
-
-1. **¿Webhooks de notificación?** → **NO**
-   - Solo polling GET /api/jobs/{id}
-   - Simplifica arquitectura (sin callbacks complejos)
-
-2. **¿API Key para app web?** → **SI**
-   - POST /archivos-cotizacion requiere `Authorization: Bearer {API_KEY}`
-   - Configurar `APP_WEB_API_KEY` en settings
-   - Incluir en headers en `pdf_uploader.py`
-
-3. **¿Reintentos en upload de PDFs?** → **SI**
-   - Implementar con `@retry` decorator (tenacity)
-   - Exponential backoff: 2s → 4s → 8s (máx 3 intentos)
-   - Resilencia ante caídas temporales de app web
-
-4. **¿Validar app web antes de encolar jobs?** → **NO**
-   - Aceptar jobs siempre (fail-fast es malo)
-   - Reintentos manejados por pdf_uploader con exponential backoff
-   - Log de fallos para debug posterior
-
-5. **¿Persistencia de metadata?** → **NO (Redis ephemeral)**
-   - Solo Redis en memoria
-   - Metadata desaparece en reboot (aceptable para MVP)
-   - Logs en archivo para auditoria
-
----
-
-## 16. Siguientes Pasos (Plan de Ejecución)
-
-### **Fase 0: Preparación (Hoy)**
-- [ ] Confirmar URL exacta de app-web: `http://{host}:{port}/archivos-cotizacion`
-- [ ] Confirmar API Key de app-web (para Header `Authorization: Bearer {KEY}`)
-- [ ] Decidir si deployer en VM Linux o Docker Desktop local
+## 13. Plan de Ejecucion
 
 ### **Fase 1: Setup del Proyecto (Semana 1)**
 1. Inicializar repo: `git init && git remote add origin <repo>`
 2. Crear estructura de carpetas (config, app, workers, tests, etc)
 3. Crear `requirements.txt` con dependencias
-4. Crear `.env.example` con variables de configuración
+4. Crear `.env.example` con variables de configuracion
 5. Crear `Dockerfile` y `docker-compose.yml` para MVP
 
 ### **Fase 2: API Base + Monitoreo (Semana 1-2)**
@@ -1254,14 +1107,14 @@ class Settings(BaseSettings):
 ### **Fase 4: Bots Base (Semana 2-3)**
 1. Implementar `base_bot.py` con Template Method
 2. Crear bots por aseguradora (heredar de base_bot)
-3. Tests de extracción de datos
+3. Tests de extraccion de datos
 
-### **Fase 5: Integración E2E (Semana 3)**
+### **Fase 5: Integracion E2E (Semana 3)**
 1. Llamada API → Queue → Bot → PDF Upload
 2. Tests end-to-end
 3. Documentar flujo
 
-### **Fase 6: Producción (Semana 4)**
+### **Fase 6: Produccion (Semana 4)**
 1. Dockerfile optimizado (multi-stage)
 2. CI/CD pipeline básico
 3. Deploy a VM/Docker
@@ -1269,12 +1122,12 @@ class Settings(BaseSettings):
 
 ---
 
-## Resumen de Decisiones Arquitectónicas
+## Resumen de Decisiones Arquitectonicas
 
-| Aspecto | Decisión | Razón |
+| Aspecto | Decision | Razon |
 |--------|----------|-------|
 | **Lenguaje** | Python 3.12 | Selenium, productivo, buen ecosistema |
-| **API** | FastAPI | Async, rápido, documentación automática |
+| **API** | FastAPI | Async, rápido, documentacion automática |
 | **Cola** | RQ (Redis Queue) | Simple, debugging fácil, scales bien 2-10 bots |
 | **Storage PDFs** | NO local, enviar a app-web | Simplifica arquitectura, responsabilidad en app-web |
 | **Auth** | API Key (Bearer token) | Seguro, simple de implementar |
@@ -1282,17 +1135,3 @@ class Settings(BaseSettings):
 | **Persistencia Jobs** | Redis ephemeral | MVP aceptable, logs en archivo para auditoria |
 | **Monitoreo** | Prometheus + Dashboard HTML | Observabilidad en tiempo real sin complejidad |
 | **Container** | Single container MVP | Simplidad, fácil de deployar |
-
----
-
-## Contactos & Recursos
-
-- **Plan completo**: Este documento
-- **Configuración**: `config/settings.py`
-- **Documentación**: Por escribir (ARCHITECTURE.md, API.md, DEPLOYMENT.md)
-- **Tests**: Por escribir (tests/ folder)
-
----
-
-**Estado**: ✅ Plan finalizado. Listo para iniciar Fase 1.
-**Próximo**: Crear estructura inicial del proyecto (requirements.txt, Dockerfile, .env.example)
