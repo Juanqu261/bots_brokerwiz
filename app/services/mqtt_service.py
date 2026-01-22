@@ -4,16 +4,14 @@ Maneja publicacion y suscripcion a topics de tareas
 """
 
 import ssl
-import time
+import uuid
 import json
 import logging
 from datetime import datetime
 from typing import Callable, Dict, Any, Optional
 
 import paho.mqtt.client as mqtt
-
 from config.settings import settings
-from config.constants import MQTTTopics, Aseguradora
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +46,8 @@ class MQTTService:
     def __init__(self):
         """Inicializar cliente MQTT"""
         self.client = mqtt.Client(
-            client_id=settings.mqtt.MQTT_CLIENT_ID,
-            protocol=mqtt.MQTTv311,
-            clean_session=settings.mqtt.MQTT_CLEAN_SESSION
+            client_id=f"{settings.mqtt.MQTT_CLIENT_ID}-{uuid.uuid4().hex[:8]}",
+            protocol=mqtt.MQTTv5
         )
         
         # Callbacks
@@ -103,7 +100,8 @@ class MQTTService:
             self.client.connect(
                 host=settings.mqtt.MQTT_HOST,
                 port=settings.mqtt.MQTT_PORT,
-                keepalive=settings.mqtt.MQTT_KEEPALIVE
+                keepalive=settings.mqtt.MQTT_KEEPALIVE,
+                clean_start=settings.mqtt.MQTT_CLEAN_START
             )
             
             logger.info("Conectado a broker MQTT")

@@ -1,4 +1,4 @@
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 from functools import lru_cache
@@ -20,7 +20,7 @@ class GeneralSettings(BaseSettings):
         description="Nivel de logging: DEBUG, INFO, WARNING, ERROR, CRITICAL"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -45,7 +45,7 @@ class APISettings(BaseSettings):
         description="Timeout en segundos para requests"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -81,7 +81,7 @@ class MQTTSettings(BaseSettings):
         default="bots",
         description="Prefijo de topics MQTT"
     )
-    MQTT_CLEAN_SESSION: bool = Field(
+    MQTT_CLEAN_START: bool = Field(
         default=True,
         description="Limpiar sesion al conectar"
     )
@@ -160,7 +160,7 @@ class MQTTSettings(BaseSettings):
         """Wildcard multilinivel: bots/queue/# (consume todo bajo queue)"""
         return f"{self.MQTT_TOPIC_PREFIX}/queue/#"
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -181,7 +181,7 @@ class WorkersSettings(BaseSettings):
         description="Intervalo en segundos para polling de MQTT"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -202,14 +202,14 @@ class AppWebIntegrationSettings(BaseSettings):
         description="Timeout en segundos para upload de PDFs a app-web"
     )
     
-    @validator("APP_WEB_BASE_URL")
+    @field_validator("APP_WEB_BASE_URL")
     def validate_base_url(cls, v):
         """Remover trailing slash de la URL"""
         if v.endswith("/"):
             return v.rstrip("/")
         return v
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -230,7 +230,7 @@ class PDFUploadSettings(BaseSettings):
         description="Factor multiplicador para backoff exponencial"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -272,7 +272,7 @@ class SeleniumSettings(BaseSettings):
         args.append(f"--window-size={width},{height}")
         return args
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -293,7 +293,7 @@ class StorageSettings(BaseSettings):
         description="Dias antes de limpiar archivos viejos"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -317,7 +317,7 @@ class LoggingSettings(BaseSettings):
         description="Numero de backups de logs a mantener"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -352,7 +352,7 @@ class SecuritySettings(BaseSettings):
         """Convertir string a lista"""
         return [m.strip() for m in self.CORS_ALLOW_METHODS.split(",")]
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -373,7 +373,7 @@ class FeatureFlagsSettings(BaseSettings):
         description="Habilitar dashboard admin"
     )
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 
@@ -439,7 +439,7 @@ class Settings(BaseSettings):
     def NUM_WORKERS(self) -> int:
         return self.workers.NUM_WORKERS
     
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         case_sensitive = True
 

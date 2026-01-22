@@ -50,9 +50,3 @@ disallow_any_generics = false
 check_untyped_defs = true
 ignore_missing_imports = true
 exclude = ["tests/", "venv/", ".venv/"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-addopts = "-v --cov=. --cov-report=html --cov-report=term-missing"
-asyncio_mode = "auto"
