@@ -5,7 +5,7 @@ pydantic==2.5.0 #
 pydantic-settings==2.1.0 #
 
 # Message Broker (MQTT)
-paho-mqtt==1.6.1
+paho-mqtt==1.6.1 #
 
 # Browser Automation
 selenium==4.15.2
@@ -18,7 +18,7 @@ requests==2.31.0
 # Retry Logic
 tenacity==8.2.3
 
-# PDF/Document handling (si aplica)
+# PDF/Document handling
 # pypdf==3.17.1
 # python-pptx==0.6.21
 

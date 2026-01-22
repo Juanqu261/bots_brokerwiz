@@ -100,7 +100,7 @@ bots_brokerWiz/
 │   │   └── health.py                    # GET /health (liveness)
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── redis_service.py             # RedisClient wrapper
+│   │   ├── mqtt_service.py              # Cliente MQTT wrapper (singleton)
 │   │   ├── email_service.py             # Notificaciones (opcional)
 │   │   └── asegurador_mapper.py         # Mapeos de payload por aseguradora
 │   └── middleware/
@@ -108,9 +108,9 @@ bots_brokerWiz/
 │       ├── auth.py                      # Validacion API Key
 │       └── logging.py                   # Request/response logging
 │
-├── workers/                             # Procesos RQ + Bots Selenium
+├── workers/                             # Procesos MQTT + Bots Selenium
 │   ├── __init__.py
-│   ├── start_rq_worker.py               # Entry point: python -m rq worker
+│   ├── mqtt_worker.py                   # Entry point: python -m workers.mqtt_worker
 │   ├── bots/
 │   │   ├── __init__.py
 │   │   ├── base_bot.py                  # Clase base (Template Method)
@@ -136,8 +136,8 @@ bots_brokerWiz/
 ├── config/
 │   ├── __init__.py
 │   ├── settings.py                      # Pydantic Settings (env vars)
-│   ├── logging_config.py                # Setup logging (console + file)
-│   └── redis_config.py                  # Configuracion de Redis
+│   ├── constants.py                     # Enums (Aseguradora, MQTTTopics, ErrorCode, etc)
+│   └── logging_config.py                # Setup logging (console + file)
 │
 ├── storage/                             # Volumen Docker (gitignored)
 │   └── screenshots/                     # Debug screenshots solamente
@@ -194,10 +194,8 @@ uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
-# Queue & Redis
-redis==5.0.1
-rq==1.15.0
-rq-scheduler==0.13.1
+# Message Queue
+paho-mqtt==1.6.1
 
 # Selenium
 selenium==4.15.2

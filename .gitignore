@@ -1,4 +1,37 @@
-# Python
+
+# Environment files con secretos
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.staging
+
+# Certificados y claves privadas (NUNCA en git)
+certs/
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+passwords.txt
+*.jks
+
+# API Keys y tokens
+secrets/
+.secrets/
+api_keys.txt
+tokens.txt
+
+# Mosquitto
+mosquitto_data/
+mosquitto_logs/
+logs/
+*.log
+*.log.*
+storage/
+data/
+tmp/
+temp/
 __pycache__/
 *.py[cod]
 *$py.class

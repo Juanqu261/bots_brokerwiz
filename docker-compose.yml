@@ -5,11 +5,18 @@ services:
     image: eclipse-mosquitto:latest
     container_name: broker_wiz_mqtt
     ports:
-      - "1883:1883"
-      - "9001:9001"
+      - "1883:1883"    # MQTT plain
+      - "9001:9001"    # MQTT WebSocket
+      # - "8883:8883"  # MQTT TLS
     volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./acl.conf:/mosquitto/config/acl.conf:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_logs:/mosquitto/log
+      # - ./certs/ca/ca.crt:/mosquitto/certs/ca.crt:ro
+      # - ./certs/server/server.crt:/mosquitto/certs/server.crt:ro
+      # - ./certs/server/server.key:/mosquitto/certs/server.key:ro
+      # - ./certs/passwords.txt:/mosquitto/config/passwords.txt:ro
     command: mosquitto -c /mosquitto/config/mosquitto.conf
     healthcheck:
       test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$SYS/broker/clients/connected", "-E"]
@@ -27,7 +34,6 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"    # API
-      - "8001:8001"    # Prometheus metrics
     environment:
       - ENVIRONMENT=development
       - DEBUG=True
@@ -45,6 +51,9 @@ services:
       - ./:/app
       - ./logs:/app/logs
       - ./storage:/app/storage
+      # - ./certs/ca/ca.crt:/app/certs/ca/ca.crt:ro
+      # - ./certs/client/client.crt:/app/certs/client/client.crt:ro
+      # - ./certs/client/client.key:/app/certs/client/client.key:ro
     networks:
       - broker_wiz_network
     healthcheck:

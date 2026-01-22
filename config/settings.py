@@ -51,7 +51,7 @@ class APISettings(BaseSettings):
 
 
 class MQTTSettings(BaseSettings):
-    """Configuracion de MQTT Broker (Mosquitto)"""
+    """Configuracion de MQTT Broker (Mosquitto) - Productivo con TLS, LWT, Reconexion"""
     
     MQTT_HOST: str = Field(
         default="localhost",
@@ -59,7 +59,7 @@ class MQTTSettings(BaseSettings):
     )
     MQTT_PORT: int = Field(
         default=1883,
-        description="Puerto del broker MQTT"
+        description="Puerto del broker MQTT (1883=plain, 8883=TLS)"
     )
     MQTT_USERNAME: Optional[str] = Field(
         default=None,
@@ -90,10 +90,75 @@ class MQTTSettings(BaseSettings):
         description="Keepalive en segundos"
     )
     
+    # TLS
+    MQTT_USE_TLS: bool = Field(
+        default=False,
+        description="Habilitar TLS/SSL para conexion segura"
+    )
+    MQTT_TLS_VERSION: Optional[str] = Field(
+        default="tlsv1_2",
+        description="Version de TLS: tlsv1_2, tlsv1_3"
+    )
+    MQTT_CA_CERTS: Optional[str] = Field(
+        default=None,
+        description="Ruta a archivo CA certificates para validar servidor"
+    )
+    MQTT_CERTFILE: Optional[str] = Field(
+        default=None,
+        description="Ruta a certificado cliente (para autenticacion mutua)"
+    )
+    MQTT_KEYFILE: Optional[str] = Field(
+        default=None,
+        description="Ruta a clave privada cliente (para autenticacion mutua)"
+    )
+    MQTT_TLS_INSECURE: bool = Field(
+        default=False,
+        description="NO verificar certificado del servidor (solo dev, NO en prod)"
+    )
+    
+    # LWT
+    MQTT_ENABLE_LWT: bool = Field(
+        default=True,
+        description="Habilitar Last Will para publicar estado offline"
+    )
+    MQTT_LWT_TOPIC: Optional[str] = Field(
+        default=None,
+        description="Topic para LWT (si None, sera: {TOPIC_PREFIX}/clients/status)"
+    )
+    
+    # Reconexion
+    MQTT_AUTO_RECONNECT: bool = Field(
+        default=True,
+        description="Reconexion automatica ante caidas"
+    )
+    MQTT_RECONNECT_MIN_DELAY: int = Field(
+        default=1,
+        description="Delay minimo en segundos para reconexion"
+    )
+    MQTT_RECONNECT_MAX_DELAY: int = Field(
+        default=32,
+        description="Delay maximo en segundos para reconexion (backoff exponencial)"
+    )
+    
     @property
-    def MQTT_QUEUE_TOPIC(self) -> str:
-        """Topic para cola de jobs"""
+    def MQTT_QUEUE_TOPIC_TEMPLATE(self) -> str:
+        """Template para cola de jobs por aseguradora: bots/queue/{aseguradora}"""
         return f"{self.MQTT_TOPIC_PREFIX}/queue"
+    
+    @property
+    def MQTT_STATUS_TOPIC(self) -> str:
+        """Topic para estado de clientes (LWT)"""
+        return self.MQTT_LWT_TOPIC or f"{self.MQTT_TOPIC_PREFIX}/clients/status"
+    
+    @property
+    def MQTT_QUEUE_WILDCARD_SINGLE(self) -> str:
+        """Wildcard de un nivel: bots/queue/+ (consume de cualquier aseguradora)"""
+        return f"{self.MQTT_TOPIC_PREFIX}/queue/+"
+    
+    @property
+    def MQTT_QUEUE_WILDCARD_MULTI(self) -> str:
+        """Wildcard multilinivel: bots/queue/# (consume todo bajo queue)"""
+        return f"{self.MQTT_TOPIC_PREFIX}/queue/#"
     
     class Config:
         env_file = ".env"
