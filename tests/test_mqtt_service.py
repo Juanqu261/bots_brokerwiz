@@ -1,20 +1,23 @@
 """
+Tests para validar que la cola MQTT funciona como:
+Producer -> Broker -> Consumer
+
+Uso:
 mosquitto -p 1883 -v
-pytest -m mqtt
+pytest -m mqtt -v
 """
 
 import time
 import pytest
+from unittest.mock import patch
 
-from app.services.mqtt_service import MQTTService
+from mosquitto.mqtt_service import MQTTService
 
 
-@pytest.mark.integration
 @pytest.mark.mqtt
 class TestMQTTQueueBasic:
     """
-    Tests básicos para validar que la cola MQTT funciona como:
-    Producer -> Broker -> Consumer
+    Tests básicos para validar que la cola MQTT funciona
     """
 
     def test_publish_and_subscribe_single_aseguradora(self):
@@ -23,6 +26,7 @@ class TestMQTTQueueBasic:
         Otro cliente se suscribe a bots/queue/hdi
         El mensaje debe llegar correctamente.
         """
+            
         received_messages = []
 
         def on_message(topic, message):
@@ -68,6 +72,7 @@ class TestMQTTQueueBasic:
         Un cliente se suscribe a bots/queue/+
         Debe recibir mensajes de cualquier aseguradora.
         """
+            
         received = []
 
         def on_any(topic, message):

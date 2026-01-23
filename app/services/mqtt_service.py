@@ -3,7 +3,6 @@ MQTT Service - Wrapper para cliente MQTT de Mosquitto
 Maneja publicacion y suscripcion a topics de tareas
 """
 
-import ssl
 import uuid
 import json
 import logging
@@ -60,7 +59,7 @@ class MQTTService:
         self.connected = False
         self.message_callbacks: Dict[str, Callable] = {}
         self.reconnect_count = 0
-        self.last_reconnect_delay = settings.mqtt.MQTT_RECONNECT_MIN_DELAY
+        self.last_reconnect_delay = 2
         
     def connect(self) -> bool:
         """
@@ -70,38 +69,25 @@ class MQTTService:
             True si conexion exitosa, False si error
         """
         try:
-            # TLS/SSL
-            if settings.mqtt.MQTT_USE_TLS:
-                self._setup_tls()
-            
             # Last Will and Testament (LWT)
-            if settings.mqtt.MQTT_ENABLE_LWT:
-                self._setup_lwt()
+            self._setup_lwt()
             
             # Auto-reconnect
-            if settings.mqtt.MQTT_AUTO_RECONNECT:
-                self.client.reconnect_delay_set(
-                    min_delay=settings.mqtt.MQTT_RECONNECT_MIN_DELAY,
-                    max_delay=settings.mqtt.MQTT_RECONNECT_MAX_DELAY
-                )
-            
-            # Credenciales
-            if settings.mqtt.MQTT_USERNAME:
-                self.client.username_pw_set(
-                    settings.mqtt.MQTT_USERNAME,
-                    settings.mqtt.MQTT_PASSWORD
-                )
-            
+            self.client.reconnect_delay_set(
+                min_delay=2,
+                max_delay=32
+            )
+
             # Conectar
             logger.info(
-                f"Conectando a MQTT: {settings.mqtt.MQTT_HOST}:{settings.mqtt.MQTT_PORT} "
+                f"Conectando a MQTT: {settings.mqtt.MQTT_HOST}:{settings.mqtt.MQTT_PORT}"
             )
             
             self.client.connect(
                 host=settings.mqtt.MQTT_HOST,
                 port=settings.mqtt.MQTT_PORT,
-                keepalive=settings.mqtt.MQTT_KEEPALIVE,
-                clean_start=settings.mqtt.MQTT_CLEAN_START
+                keepalive=60,
+                clean_start=1
             )
             
             logger.info("Conectado a broker MQTT")
@@ -240,7 +226,7 @@ class MQTTService:
                 callback=handle_any_aseguradora
             )
         """
-        topic = settings.mqtt.MQTT_QUEUE_WILDCARD_SINGLE
+        topic = settings.mqtt.get_wildcard_topic
         logger.info("Escuchando todas las aseguradoras")
         return self.subscribe(topic, callback)
     
@@ -277,33 +263,6 @@ class MQTTService:
         except Exception as e:
             logger.error(f"Error en loop_forever: {e}")
 
-    
-    def _setup_tls(self) -> None:
-        """Configurar TLS/SSL para conexion cifrada"""
-        try:
-            # Validar certificados del servidor
-            tls_version = getattr(ssl, f"PROTOCOL_{settings.mqtt.MQTT_TLS_VERSION.upper()}", ssl.PROTOCOL_TLSv1_2)
-            
-            self.client.tls_set(
-                ca_certs=settings.mqtt.MQTT_CA_CERTS,          # CA para validar servidor
-                certfile=settings.mqtt.MQTT_CERTFILE,          # Cert cliente (mutual auth)
-                keyfile=settings.mqtt.MQTT_KEYFILE,            # Key cliente (mutual auth)
-                cert_reqs=ssl.CERT_REQUIRED if not settings.mqtt.MQTT_TLS_INSECURE else ssl.CERT_NONE,
-                tls_version=tls_version,
-                ciphers=None
-            )
-            
-            # NO verificar hostname (solo para dev, NUNCA en produccion)
-            if settings.mqtt.MQTT_TLS_INSECURE:
-                self.client.tls_insecure_set(True)
-                logger.warning("TLS INSECURE: No verificando certificado del servidor (SOLO PARA DEV)")
-            else:
-                logger.info("TLS configurado con validacion de certificado del servidor")
-        
-        except Exception as e:
-            logger.error(f"Error configurando TLS: {e}")
-            raise
-    
     def _setup_lwt(self) -> None:
         """
         Configurar Last Will and Testament (LWT)
@@ -311,7 +270,7 @@ class MQTTService:
         Publica mensaje de estado offline cuando cliente se desconecta inesperadamente
         """
         try:
-            lwt_topic = settings.mqtt.MQTT_STATUS_TOPIC
+            lwt_topic = settings.mqtt.MQTT_LWT_TOPIC
             lwt_payload = json.dumps({
                 "client_id": settings.mqtt.MQTT_CLIENT_ID,
                 "status": "offline",
@@ -322,7 +281,7 @@ class MQTTService:
                 topic=lwt_topic,
                 payload=lwt_payload,
                 qos=settings.mqtt.MQTT_QOS,
-                retain=True  # Guardar mensaje de LWT para nuevos subscribers
+                retain=True
             )
             
             logger.info(f"LWT configurado: {lwt_topic} → offline")
@@ -343,17 +302,15 @@ class MQTTService:
             self.reconnect_count = 0
             logger.info("Conectado a broker MQTT")
             
-            # Publicar estado online (si LWT estaba offline)
-            if settings.mqtt.MQTT_ENABLE_LWT:
-                self._publish_online_status()
+            # Publicar estado online (LWT siempre activo)
+            self._publish_online_status()
         else:
             logger.error(f"Error de conexion: {reason_code}")
     
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties=None):
         """
-        Callback cuando se desconecta del broker
-        
-        Si MQTT_AUTO_RECONNECT=true, el cliente reconectará automáticamente
+        Callback cuando se desconecta del broker.
+        El cliente reconectará automáticamente (reconnect_delay_set configurado).
         """
         self.connected = False
         self.reconnect_count += 1
@@ -399,7 +356,7 @@ class MQTTService:
     def _publish_online_status(self) -> None:
         """Publicar estado online cuando se conecta"""
         try:
-            status_topic = settings.mqtt.MQTT_STATUS_TOPIC
+            status_topic = settings.mqtt.MQTT_LWT_TOPIC
             online_payload = json.dumps({
                 "client_id": settings.mqtt.MQTT_CLIENT_ID,
                 "status": "online",
