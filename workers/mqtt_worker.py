@@ -62,19 +62,27 @@ async def handle_task(topic: str, data: dict) -> None:
         raise
 
 
-async def run_worker(aseguradora: Optional[str] = None) -> None:
+async def run_worker(
+    client_id: str,
+    aseguradora: Optional[str] = None,
+    persistent: bool = True
+) -> None:
     """
     Ejecutar worker MQTT.
     
     Args:
+        client_id: ID único del worker (ej: "worker-1", "worker-hdi")
         aseguradora: Si se especifica, solo escucha esa aseguradora.
                     Si es None, escucha todas (wildcard).
+        persistent: Si True, usa sesiones persistentes para recuperar
+                   mensajes pendientes tras reinicio.
     """
-    mqtt = MQTTService()
+    # Crear cliente MQTT
+    mqtt = MQTTService(client_id=client_id, persistent=persistent)
     topic = mqtt.get_topic(aseguradora) if aseguradora else None
     
     scope = aseguradora.upper() if aseguradora else "TODAS"
-    logger.info(f"Iniciando worker MQTT - Aseguradoras: {scope}")
+    logger.info(f"Worker [{client_id}] - Aseguradoras: {scope} - Persistente: {persistent}")
     
     reconnect_interval = 5.0
     
@@ -113,10 +121,21 @@ def main():
     """Entry point del worker."""
     parser = argparse.ArgumentParser(description="Worker MQTT para bots de cotización")
     parser.add_argument(
+        "--id",
+        type=str,
+        required=True,
+        help="ID único del worker (ej: worker-1, worker-hdi). Requerido para sesiones persistentes."
+    )
+    parser.add_argument(
         "--aseguradora", "-a",
         type=str,
         default=None,
-        help="Aseguradora específica (hdi, sura, axa, etc). Si no se especifica, escucha todas."
+        help="Aseguradora específica (hdi, sura, axa). Si no se especifica, escucha todas."
+    )
+    parser.add_argument(
+        "--no-persistent",
+        action="store_true",
+        help="Deshabilitar sesiones persistentes (no recomendado en producción)."
     )
     args = parser.parse_args()
     
@@ -136,7 +155,11 @@ def main():
             signal.signal(sig, lambda s, f: loop.call_soon_threadsafe(loop.stop))
     
     try:
-        loop.run_until_complete(run_worker(args.aseguradora))
+        loop.run_until_complete(run_worker(
+            client_id=args.id,
+            aseguradora=args.aseguradora,
+            persistent=not args.no_persistent
+        ))
     except KeyboardInterrupt:
         logger.info("Interrumpido por usuario")
     finally:

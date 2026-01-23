@@ -16,8 +16,8 @@ import json
 import uuid
 import logging
 import asyncio
-from contextlib import asynccontextmanager
 from datetime import datetime
+from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, AsyncIterator, Callable, Awaitable
 
 import aiomqtt
@@ -56,26 +56,59 @@ class MQTTService:
     """
     Cliente MQTT asíncrono para comunicación con Mosquitto.
     
-    Uso básico:
-    -----------
-    mqtt = MQTTService()
-    
-    # Publicar
+    Uso para API:
+    -----------------------------------------------------------
+    mqtt = MQTTService(client_id="brokerwiz-api", persistent=False)
     async with mqtt:
         await mqtt.publish_task("hdi", {"job_id": "123", "payload": {...}})
     
-    # Como worker escuchando mensajes
+    Uso con persistencia (para workers):
+    ------------------------------------
+    mqtt = MQTTService(client_id="worker-hdi-1", persistent=True)
     async with mqtt:
         await mqtt.subscribe_wildcard()
         async for topic, message in mqtt.messages():
             await process_message(topic, message)
     """
     
-    def __init__(self, client_id: Optional[str] = None):
+    def __init__(
+        self, 
+        client_id: Optional[str] = None,
+        persistent: bool = False
+    ):
+        """
+        Inicializar cliente MQTT.
+        
+        Args:
+            client_id: ID único del cliente. 
+                      - Para API: dejar None (genera UUID automático)
+                      - Para workers: usar ID fijo ej: "worker-1", "worker-hdi-1"
+            persistent: Si True, habilita sesiones persistentes (clean_session=False).
+                       REQUIERE client_id fijo para funcionar correctamente.
+                       El broker guardará mensajes QoS 1/2 mientras el cliente
+                       esté desconectado y los entregará al reconectar.
+        
+        Ejemplos:
+            # API - múltiples instancias, sin persistencia
+            MQTTService()  # → client_id: "brokerwiz-api-a1b2c3d4"
+            
+            # Worker con persistencia - ID fijo obligatorio
+            MQTTService(client_id="worker-1", persistent=True)
+            MQTTService(client_id="worker-hdi", persistent=True)
+        """
         self._client: Optional[aiomqtt.Client] = None
         self._connected = False
         self._subscriptions: set[str] = set()
-        # Client ID único para evitar colisiones en el broker
+        self._persistent = persistent
+        
+        # Validar: persistencia requiere client_id fijo
+        if persistent and not client_id:
+            raise ValueError(
+                "persistent=True requiere client_id fijo. "
+                "Ejemplo: MQTTService(client_id='worker-1', persistent=True)"
+            )
+        
+        # Generar client_id: fijo si se proporciona, aleatorio si no
         self._client_id = client_id or f"{settings.mqtt.MQTT_CLIENT_ID}-{uuid.uuid4().hex[:8]}"
     
     @property
@@ -85,6 +118,10 @@ class MQTTService:
     @property
     def connected(self) -> bool:
         return self._connected
+    
+    @property
+    def persistent(self) -> bool:
+        return self._persistent
     
     @property
     def topic_prefix(self) -> str:
@@ -104,8 +141,19 @@ class MQTTService:
         """Topic para Last Will Testament"""
         return settings.mqtt.MQTT_LWT_TOPIC
     
-    def _create_client(self) -> aiomqtt.Client:
-        """Crea instancia del cliente con configuración LWT"""
+    def _create_client(self, persistent_session: bool = False) -> aiomqtt.Client:
+        """
+        Crea instancia del cliente con configuración LWT.
+        
+        Args:
+            persistent_session: Si True, usa clean_session=False para que el broker
+                               guarde mensajes QoS 1/2 cuando el cliente está desconectado.
+                               Los mensajes se entregarán cuando el cliente reconecte.
+        
+        Importante para recuperación ante caídas:
+        - persistent_session=True + QoS 1/2 = mensajes guardados en broker
+        - El client_id DEBE ser estable (no usar UUID) para sesiones persistentes
+        """
         lwt_message = aiomqtt.Will(
             topic=self.lwt_topic,
             payload=json.dumps({
@@ -122,16 +170,22 @@ class MQTTService:
             port=settings.mqtt.MQTT_PORT,
             identifier=self._client_id,
             will=lwt_message,
-            clean_session=True
+            # clean_session=False permite recuperar mensajes perdidos durante desconexión
+            clean_session=not persistent_session
         )
     
     async def connect(self) -> None:
-        """Conectar al broker MQTT"""
+        """
+        Conectar al broker MQTT.
+        
+        Si self._persistent=True, usa clean_session=False para recuperar
+        mensajes pendientes de sesiones anteriores.
+        """
         if self._connected:
             return
         
         try:
-            self._client = self._create_client()
+            self._client = self._create_client(persistent_session=self._persistent)
             await self._client.__aenter__()
             self._connected = True
             
@@ -284,16 +338,19 @@ class MQTTService:
             logger.warning(f"Error publicando status {status}: {e}")
 
 
-# Singleton
-
+# Singleton para FastAPI
 _mqtt_instance: Optional[MQTTService] = None
+
+# Client ID fijo para la API - evita sesiones huérfanas en el broker
+API_CLIENT_ID = f"{settings.mqtt.MQTT_CLIENT_ID}-api"
 
 
 def get_mqtt_service() -> MQTTService:
-    """Obtener instancia singleton del servicio MQTT"""
+    """Obtener instancia singleton del servicio MQTT para la API."""
     global _mqtt_instance
     if _mqtt_instance is None:
-        _mqtt_instance = MQTTService()
+        # Client ID fijo, sin sesión persistente (solo publica)
+        _mqtt_instance = MQTTService(client_id=API_CLIENT_ID, persistent=False)
     return _mqtt_instance
 
 
