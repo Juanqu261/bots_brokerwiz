@@ -11,6 +11,7 @@ Funcionalidades:
 - Reconexión automática con backoff exponencial
 """
 
+import sys
 import json
 import uuid
 import logging
@@ -26,6 +27,29 @@ logger = logging.getLogger(__name__)
 
 # Type alias para handlers de mensajes
 MessageHandler = Callable[[str, Dict[str, Any]], Awaitable[None]]
+
+
+def configure_event_loop() -> None:
+    """
+    Configura el event loop correcto según la plataforma.
+    
+    En Windows, aiomqtt requiere SelectorEventLoop en lugar del
+    ProactorEventLoop por defecto (que no soporta add_reader/add_writer).
+    
+    Llamar ANTES de cualquier operación async:
+    - Al inicio de main.py de FastAPI
+    - Al inicio de scripts de workers
+    
+    Uso:
+        from mosquitto.mqtt_service import configure_event_loop
+        configure_event_loop()
+        
+        # Ahora puedes usar asyncio.run(), uvicorn, etc.
+    """
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        logger.debug("Event loop configurado: WindowsSelectorEventLoopPolicy")
+    # En Linux/macOS no se requiere configuración especial
 
 
 class MQTTService:
