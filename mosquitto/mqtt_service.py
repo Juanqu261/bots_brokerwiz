@@ -87,7 +87,7 @@ class MQTTService:
                 host=settings.mqtt.MQTT_HOST,
                 port=settings.mqtt.MQTT_PORT,
                 keepalive=60,
-                clean_start=1
+                clean_start=3 # Always start clean session
             )
             
             logger.info("Conectado a broker MQTT")
