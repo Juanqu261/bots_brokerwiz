@@ -74,7 +74,7 @@ async def crear_cotizacion(
     try:
         success = await mqtt.publish_task(
             aseguradora=aseguradora_lower,
-            data=job.to_mqtt_message()
+            task_data=job.to_mqtt_message()
         )
         
         if not success:
@@ -153,7 +153,7 @@ async def crear_cotizaciones_batch(
         
         # Publicar
         try:
-            await mqtt.publish_task(aseguradora, job.to_mqtt_message())
+            await mqtt.publish_task(aseguradora, task_data=job.to_mqtt_message())
             results.append(JobResponse(
                 job_id=job.job_id,
                 aseguradora=aseguradora,

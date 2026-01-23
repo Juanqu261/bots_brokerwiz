@@ -1,7 +1,11 @@
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional, List
 from functools import lru_cache
+from pathlib import Path
+
+# Ruta al archivo .env (relativa a la raíz del proyecto)
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class GeneralSettings(BaseSettings):
@@ -20,9 +24,12 @@ class GeneralSettings(BaseSettings):
         description="Nivel de logging: DEBUG, INFO, WARNING, ERROR, CRITICAL"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE,
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore"
+    )
 
 
 class APISettings(BaseSettings):
@@ -45,9 +52,7 @@ class APISettings(BaseSettings):
         description="Timeout en segundos para requests"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class MQTTSettings(BaseSettings):
@@ -90,9 +95,7 @@ class MQTTSettings(BaseSettings):
         """Topic para Last Will and Testament"""
         return f"{self.MQTT_TOPIC_PREFIX}/clients/status"
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class WorkersSettings(BaseSettings):
@@ -111,9 +114,7 @@ class WorkersSettings(BaseSettings):
         description="Intervalo en segundos para polling de MQTT"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class AppWebIntegrationSettings(BaseSettings):
@@ -139,9 +140,7 @@ class AppWebIntegrationSettings(BaseSettings):
             return v.rstrip("/")
         return v
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class PDFUploadSettings(BaseSettings):
@@ -160,9 +159,7 @@ class PDFUploadSettings(BaseSettings):
         description="Factor multiplicador para backoff exponencial"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class SeleniumSettings(BaseSettings):
@@ -202,9 +199,7 @@ class SeleniumSettings(BaseSettings):
         args.append(f"--window-size={width},{height}")
         return args
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class StorageSettings(BaseSettings):
@@ -223,9 +218,7 @@ class StorageSettings(BaseSettings):
         description="Dias antes de limpiar archivos viejos"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 class LoggingSettings(BaseSettings):
     """Configuracion de logging"""
@@ -247,9 +240,7 @@ class LoggingSettings(BaseSettings):
         description="Numero de backups de logs a mantener"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class SecuritySettings(BaseSettings):
@@ -282,9 +273,7 @@ class SecuritySettings(BaseSettings):
         """Convertir string a lista"""
         return [m.strip() for m in self.CORS_ALLOW_METHODS.split(",")]
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class FeatureFlagsSettings(BaseSettings):
@@ -303,9 +292,7 @@ class FeatureFlagsSettings(BaseSettings):
         description="Habilitar dashboard admin"
     )
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 class Settings(BaseSettings):
@@ -362,16 +349,10 @@ class Settings(BaseSettings):
         return self.mqtt.MQTT_PORT
     
     @property
-    def MQTT_QUEUE_TOPIC(self) -> str:
-        return self.mqtt.MQTT_QUEUE_TOPIC
-    
-    @property
     def NUM_WORKERS(self) -> int:
         return self.workers.NUM_WORKERS
     
-    class ConfigDict:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 # Singleton instance

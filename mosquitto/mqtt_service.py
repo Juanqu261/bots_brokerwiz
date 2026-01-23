@@ -354,6 +354,7 @@ def get_mqtt_service() -> MQTTService:
     return _mqtt_instance
 
 
+@asynccontextmanager
 async def mqtt_lifespan_manager():
     """
     Context manager para lifespan de FastAPI.
