@@ -1,433 +1,363 @@
 """
-MQTT Service - Wrapper para cliente MQTT de Mosquitto
-Maneja publicacion y suscripcion a topics de tareas
+MQTT Service - Cliente asíncrono para Mosquitto con aiomqtt
+
+Servicio completamente async para integración con FastAPI y workers de Selenium.
+No bloquea el event loop, ideal para alta concurrencia.
+
+Funcionalidades:
+- Publicar tareas por aseguradora (bots/queue/{aseguradora})
+- Suscribirse a topics específicos o wildcard
+- Last Will Testament (LWT) para detección de desconexión
+- Reconexión automática con backoff exponencial
 """
 
-import uuid
 import json
+import uuid
 import logging
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Callable, Dict, Any, Optional
+from typing import Dict, Any, Optional, AsyncIterator, Callable, Awaitable
 
-import paho.mqtt.client as mqtt
+import aiomqtt
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# Type alias para handlers de mensajes
+MessageHandler = Callable[[str, Dict[str, Any]], Awaitable[None]]
+
 
 class MQTTService:
     """
-    Servicio para comunicacion con MQTT Mosquitto
+    Cliente MQTT asíncrono para comunicación con Mosquitto.
     
-    Uso:
-    ----
-    # Inicializar
-    mqtt_service = MQTTService()
-    mqtt_service.connect()
-    mqtt_service.loop_start()  # non-blocking
+    Uso básico:
+    -----------
+    mqtt = MQTTService()
     
-    # Publicar tarea para HDI
-    mqtt_service.publish_task(
-        aseguradora="hdi",
-        task_data={"job_id": "uuid-123", "payload": {...}}
-    )
+    # Publicar
+    async with mqtt:
+        await mqtt.publish_task("hdi", {"job_id": "123", "payload": {...}})
     
-    # Suscribirse a cola de una aseguradora específica
-    def on_hdi_message(topic, message):
-        print(f"Mensaje para HDI: {message}")
-    
-    mqtt_service.subscribe_aseguradora("hdi", callback=on_hdi_message)
-    
-    # Suscribirse a cualquier aseguradora (worker genérico)
-    mqtt_service.subscribe_wildcard(callback=on_any_aseguradora)
+    # Como worker escuchando mensajes
+    async with mqtt:
+        await mqtt.subscribe_wildcard()
+        async for topic, message in mqtt.messages():
+            await process_message(topic, message)
     """
     
-    def __init__(self):
-        """Inicializar cliente MQTT"""
-        self.client = mqtt.Client(
-            client_id=f"{settings.mqtt.MQTT_CLIENT_ID}-{uuid.uuid4().hex[:8]}",
-            protocol=mqtt.MQTTv5
+    def __init__(self, client_id: Optional[str] = None):
+        self._client: Optional[aiomqtt.Client] = None
+        self._connected = False
+        self._subscriptions: set[str] = set()
+        # Client ID único para evitar colisiones en el broker
+        self._client_id = client_id or f"{settings.mqtt.MQTT_CLIENT_ID}-{uuid.uuid4().hex[:8]}"
+    
+    @property
+    def client_id(self) -> str:
+        return self._client_id
+    
+    @property
+    def connected(self) -> bool:
+        return self._connected
+    
+    @property
+    def topic_prefix(self) -> str:
+        return settings.mqtt.MQTT_TOPIC_PREFIX
+    
+    def get_topic(self, aseguradora: str) -> str:
+        """Genera topic para aseguradora: bots/queue/{aseguradora}"""
+        return f"{self.topic_prefix}/queue/{aseguradora}"
+    
+    @property
+    def wildcard_topic(self) -> str:
+        """Topic wildcard para todas las aseguradoras: bots/queue/+"""
+        return f"{self.topic_prefix}/queue/+"
+    
+    @property
+    def lwt_topic(self) -> str:
+        """Topic para Last Will Testament"""
+        return settings.mqtt.MQTT_LWT_TOPIC
+    
+    def _create_client(self) -> aiomqtt.Client:
+        """Crea instancia del cliente con configuración LWT"""
+        lwt_message = aiomqtt.Will(
+            topic=self.lwt_topic,
+            payload=json.dumps({
+                "client_id": self._client_id,
+                "status": "offline",
+                "timestamp": datetime.now().isoformat()
+            }),
+            qos=settings.mqtt.MQTT_QOS,
+            retain=True
         )
         
-        # Callbacks
-        self.client.on_connect = self._on_connect
-        self.client.on_disconnect = self._on_disconnect
-        self.client.on_message = self._on_message
-        self.client.on_publish = self._on_publish
-        
-        # State
-        self.connected = False
-        self.message_callbacks: Dict[str, Callable] = {}
-        self.reconnect_count = 0
-        self.last_reconnect_delay = 2
-        
-    def connect(self) -> bool:
-        """
-        Conectar a broker MQTT
-        
-        Returns:
-            True si conexion exitosa, False si error
-        """
-        try:
-            # Last Will and Testament (LWT)
-            self._setup_lwt()
-            
-            # Auto-reconnect
-            self.client.reconnect_delay_set(
-                min_delay=2,
-                max_delay=32
-            )
-
-            # Conectar
-            logger.info(
-                f"Conectando a MQTT: {settings.mqtt.MQTT_HOST}:{settings.mqtt.MQTT_PORT}"
-            )
-            
-            self.client.connect(
-                host=settings.mqtt.MQTT_HOST,
-                port=settings.mqtt.MQTT_PORT,
-                keepalive=60,
-                clean_start=3 # Always start clean session
-            )
-            
-            logger.info("Conectado a broker MQTT")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error al conectar a MQTT: {e}")
-            return False
+        return aiomqtt.Client(
+            hostname=settings.mqtt.MQTT_HOST,
+            port=settings.mqtt.MQTT_PORT,
+            identifier=self._client_id,
+            will=lwt_message,
+            clean_session=True
+        )
     
-    def disconnect(self) -> None:
-        """Desconectar de broker MQTT"""
+    async def connect(self) -> None:
+        """Conectar al broker MQTT"""
+        if self._connected:
+            return
+        
         try:
-            self.client.disconnect()
-            logger.info("Desconectado de broker MQTT")
-        except Exception as e:
-            logger.error(f"Error al desconectar de MQTT: {e}")
+            self._client = self._create_client()
+            await self._client.__aenter__()
+            self._connected = True
+            
+            # Publicar estado online
+            await self._publish_status("online")
+            logger.info(f"Conectado a MQTT: {settings.mqtt.MQTT_HOST}:{settings.mqtt.MQTT_PORT}")
+            
+        except aiomqtt.MqttError as e:
+            logger.error(f"Error conectando a MQTT: {e}")
+            raise
     
-    def publish_task(
-        self, 
-        aseguradora: str, 
+    async def disconnect(self) -> None:
+        """Desconectar del broker MQTT"""
+        if not self._connected or not self._client:
+            return
+        
+        try:
+            await self._publish_status("offline")
+            await self._client.__aexit__(None, None, None)
+            self._connected = False
+            self._subscriptions.clear()
+            logger.info("Desconectado de MQTT")
+            
+        except aiomqtt.MqttError as e:
+            logger.error(f"Error desconectando: {e}")
+    
+    async def __aenter__(self) -> "MQTTService":
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.disconnect()
+    
+    async def publish_task(
+        self,
+        aseguradora: str,
         task_data: Dict[str, Any],
         retain: bool = False
     ) -> bool:
         """
-        Publicar tarea en cola MQTT
+        Publicar tarea en cola de aseguradora.
         
         Args:
-            aseguradora: Nombre de aseguradora (ej: "hdi", "seguros_monterrey")
-            task_data: Dict con {"job_id", "timestamp", "payload", ...}
-            retain: Si True, guardar mensaje en broker (default: False, ephemeral)
-        
-        Ejemplo:
-            mqtt_service.publish_task(
-                aseguradora="hdi",
-                task_data={"job_id": "abc123", "payload": {...}}
-            )
+            aseguradora: Nombre (ej: "hdi", "sura", "axa")
+            task_data: Dict con job_id, payload, etc.
+            retain: Retener mensaje en broker
         
         Returns:
-            True si publish exitoso
+            True si se publicó exitosamente
         """
+        if not self._connected or not self._client:
+            logger.error("No conectado a MQTT")
+            return False
+        
         try:
             # Agregar timestamp si no existe
             if "timestamp" not in task_data:
                 task_data["timestamp"] = datetime.now().isoformat()
             
-            # Topic per-aseguradora
-            topic = self.get_aseguradora_topic(aseguradora)
+            topic = self.get_topic(aseguradora)
+            payload = json.dumps(task_data, ensure_ascii=False)
             
-            # Convertir a JSON
-            message = json.dumps(task_data, ensure_ascii=False)
-            
-            # Publicar
-            result = self.client.publish(
+            await self._client.publish(
                 topic=topic,
-                payload=message,
+                payload=payload,
                 qos=settings.mqtt.MQTT_QOS,
                 retain=retain
             )
             
-            if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                logger.info(f"Tarea publicada en {topic}: {task_data.get('job_id')}")
-                return True
-            else:
-                logger.error(f"Error publicando: rc={result.rc}")
-                return False
-        
-        except Exception as e:
-            logger.error(f"Error en publish_task: {e}")
-            return False
-    
-    def subscribe(self, topic: str, callback: Optional[Callable] = None) -> bool:
-        """
-        Suscribirse a un topic MQTT (puede incluir wildcards)
-        
-        Args:
-            topic: Topic a suscribirse, ej:
-                   - "bots/queue/hdi" (specific)
-                   - "bots/queue/+" (cualquier aseguradora)
-                   - "bots/queue/#" (cualquier cosa bajo queue)
-            callback: Función callback(topic, message_dict)
-        
-        Returns:
-            True si suscripcion exitosa
-        """
-        try:
-            # Guardar callback
-            if callback:
-                self.message_callbacks[topic] = callback
-            
-            # Suscribirse
-            result = self.client.subscribe(topic, qos=settings.mqtt.MQTT_QOS)
-            
-            if result[0] == mqtt.MQTT_ERR_SUCCESS:
-                logger.info(f"Suscrito a topic: {topic}")
-                return True
-            else:
-                logger.error(f"Error en subscripcion: rc={result[0]}")
-                return False
-        
-        except Exception as e:
-            logger.error(f"Error en subscribe: {e}")
-            return False
-    
-    def subscribe_aseguradora(
-        self, 
-        aseguradora: str, 
-        callback: Optional[Callable] = None
-    ) -> bool:
-        """
-        Suscribirse a cola de aseguradora específica
-        
-        Args:
-            aseguradora: Nombre de aseguradora (ej: "hdi")
-            callback: Función callback(topic, message_dict)
-        
-        Ejemplo:
-            mqtt_service.subscribe_aseguradora(
-                "hdi",
-                callback=handle_hdi_tasks
-            )
-        """
-        topic = self.get_aseguradora_topic(aseguradora)
-        return self.subscribe(topic, callback)
-    
-    def subscribe_wildcard(self, callback: Optional[Callable] = None) -> bool:
-        """
-        Suscribirse a CUALQUIER aseguradora (worker genérico)
-        
-        Usa wildcard de un nivel: bots/queue/+
-        
-        Args:
-            callback: Función callback(topic, message_dict)
-        
-        Ejemplo:
-            mqtt_service.subscribe_wildcard(
-                callback=handle_any_aseguradora
-            )
-        """
-        topic = settings.mqtt.get_wildcard_topic
-        logger.info("Escuchando todas las aseguradoras")
-        return self.subscribe(topic, callback)
-    
-    def get_aseguradora_topic(self, aseguradora: str) -> str:
-        """
-        Obtener topic para aseguradora específica
-        
-        Ejemplo: aseguradora="hdi" → "bots/queue/hdi"
-        """
-        return f"{settings.mqtt.MQTT_TOPIC_PREFIX}/queue/{aseguradora}"
-    
-    def loop_start(self) -> None:
-        """Iniciar loop de eventos MQTT (non-blocking)"""
-        try:
-            self.client.loop_start()
-            logger.info("Loop MQTT iniciado (background)")
-        except Exception as e:
-            logger.error(f"Error iniciando loop: {e}")
-    
-    def loop_stop(self) -> None:
-        """Detener loop de eventos MQTT"""
-        try:
-            self.client.loop_stop()
-            logger.info("Loop MQTT detenido")
-        except Exception as e:
-            logger.error(f"Error deteniendo loop: {e}")
-    
-    def loop_forever(self) -> None:
-        """Bloquear en loop MQTT (para workers principal)"""
-        try:
-            self.client.loop_forever()
-        except KeyboardInterrupt:
-            logger.info("Loop MQTT interrumpido por usuario")
-        except Exception as e:
-            logger.error(f"Error en loop_forever: {e}")
-
-    def _setup_lwt(self) -> None:
-        """
-        Configurar Last Will and Testament (LWT)
-        
-        Publica mensaje de estado offline cuando cliente se desconecta inesperadamente
-        """
-        try:
-            lwt_topic = settings.mqtt.MQTT_LWT_TOPIC
-            lwt_payload = json.dumps({
-                "client_id": settings.mqtt.MQTT_CLIENT_ID,
-                "status": "offline",
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            self.client.will_set(
-                topic=lwt_topic,
-                payload=lwt_payload,
-                qos=settings.mqtt.MQTT_QOS,
-                retain=True
-            )
-            
-            logger.info(f"LWT configurado: {lwt_topic} → offline")
-        
-        except Exception as e:
-            logger.error(f"Error configurando LWT: {e}")
-    
-    def _on_connect(self, client, userdata, connect_flags, reason_code, properties=None):
-        """
-        Callback cuando se conecta al broker
-        
-        reason_code:
-          0 = Connection successful
-          1-5 = Various connection failures
-        """
-        if reason_code == 0:
-            self.connected = True
-            self.reconnect_count = 0
-            logger.info("Conectado a broker MQTT")
-            
-            # Publicar estado online (LWT siempre activo)
-            self._publish_online_status()
-        else:
-            logger.error(f"Error de conexion: {reason_code}")
-    
-    def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties=None):
-        """
-        Callback cuando se desconecta del broker.
-        El cliente reconectará automáticamente (reconnect_delay_set configurado).
-        """
-        self.connected = False
-        self.reconnect_count += 1
-        logger.warning(
-            f"Desconectado de broker: reason_code={reason_code}, "
-            f"reconnect_attempt={self.reconnect_count}"
-        )
-    
-    def _on_message(self, client, userdata, msg):
-        """Callback cuando se recibe un mensaje"""
-        try:
-            topic = msg.topic
-            
-            # Decodificar payload
-            payload = msg.payload.decode('utf-8')
-            message_dict = json.loads(payload)
-            
-            logger.debug(f"Mensaje recibido en {topic}: {message_dict.get('job_id', '???')}")
-            
-            # Ejecutar callback si existe
-            callback = self.message_callbacks.get(topic)
-            if callback:
-                callback(topic, message_dict)
-            else:
-                # Si es un wildcard, buscar callback del wildcard
-                wildcard_topics = [k for k in self.message_callbacks.keys() if '+' in k or '#' in k]
-                for wildcard_topic in wildcard_topics:
-                    if self._matches_wildcard(topic, wildcard_topic):
-                        self.message_callbacks[wildcard_topic](topic, message_dict)
-                        return
-                
-                logger.warning(f"No hay callback registrado para {topic}")
-        
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decodificando JSON: {e}")
-        except Exception as e:
-            logger.error(f"Error en _on_message: {e}")
-    
-    def _on_publish(self, client, userdata, mid):
-        """Callback cuando se completa publish"""
-        logger.debug(f"Mensaje publicado (mid={mid})")
-    
-    def _publish_online_status(self) -> None:
-        """Publicar estado online cuando se conecta"""
-        try:
-            status_topic = settings.mqtt.MQTT_LWT_TOPIC
-            online_payload = json.dumps({
-                "client_id": settings.mqtt.MQTT_CLIENT_ID,
-                "status": "online",
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            self.client.publish(
-                topic=status_topic,
-                payload=online_payload,
-                qos=settings.mqtt.MQTT_QOS,
-                retain=True
-            )
-        except Exception as e:
-            logger.error(f"Error publicando estado online: {e}")
-    
-    @staticmethod
-    def _matches_wildcard(topic: str, wildcard: str) -> bool:
-        """Verificar si topic coincide con wildcard pattern"""
-        # bots/queue/hdi coincide con bots/queue/+ (un nivel)
-        # bots/queue/hdi/extra coincide con bots/queue/# (multiples niveles)
-        
-        if '#' in wildcard:
-            # Multilinivel: bots/queue/# coincide con bots/queue/* (anything under)
-            base = wildcard.replace('/#', '').replace('#', '')
-            return topic.startswith(base)
-        elif '+' in wildcard:
-            # Un nivel: bots/queue/+ coincide con bots/queue/hdi
-            parts_wildcard = wildcard.split('/')
-            parts_topic = topic.split('/')
-            
-            if len(parts_wildcard) != len(parts_topic):
-                return False
-            
-            for w, t in zip(parts_wildcard, parts_topic):
-                if w != '+' and w != t:
-                    return False
+            logger.info(f"Tarea publicada → {topic}: {task_data.get('job_id', '?')}")
             return True
-        else:
-            # Exact match
-            return topic == wildcard
+            
+        except aiomqtt.MqttError as e:
+            logger.error(f"Error publicando tarea: {e}")
+            return False
+    
+    async def subscribe(self, topic: str) -> bool:
+        """Suscribirse a un topic específico"""
+        if not self._connected or not self._client:
+            logger.error("No conectado a MQTT")
+            return False
+        
+        try:
+            await self._client.subscribe(topic, qos=settings.mqtt.MQTT_QOS)
+            self._subscriptions.add(topic)
+            logger.info(f"Suscrito a: {topic}")
+            return True
+            
+        except aiomqtt.MqttError as e:
+            logger.error(f"Error suscribiendo a {topic}: {e}")
+            return False
+    
+    async def subscribe_aseguradora(self, aseguradora: str) -> bool:
+        """Suscribirse a cola de aseguradora específica"""
+        return await self.subscribe(self.get_topic(aseguradora))
+    
+    async def subscribe_wildcard(self) -> bool:
+        """Suscribirse a todas las aseguradoras (bots/queue/+)"""
+        logger.info("Escuchando todas las aseguradoras")
+        return await self.subscribe(self.wildcard_topic)
+    
+    async def messages(self) -> AsyncIterator[tuple[str, Dict[str, Any]]]:
+        """
+        Iterador asíncrono de mensajes recibidos.
+        
+        Yields:
+            Tupla (topic, message_dict)
+        
+        Uso:
+            async for topic, data in mqtt.messages():
+                aseguradora = topic.split("/")[-1]
+                await process_task(aseguradora, data)
+        """
+        if not self._client:
+            raise RuntimeError("Cliente no conectado")
+        
+        async for message in self._client.messages:
+            try:
+                topic = str(message.topic)
+                payload = message.payload.decode("utf-8")
+                data = json.loads(payload)
+                
+                logger.debug(f"Mensaje recibido ← {topic}: {data.get('job_id', '?')}")
+                yield topic, data
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON inválido en mensaje: {e}")
+            except Exception as e:
+                logger.error(f"Error procesando mensaje: {e}")
+    
+    async def _publish_status(self, status: str) -> None:
+        """Publicar estado del cliente (online/offline)"""
+        if not self._client:
+            return
+        
+        try:
+            payload = json.dumps({
+                "client_id": self._client_id,
+                "status": status,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            await self._client.publish(
+                topic=self.lwt_topic,
+                payload=payload,
+                qos=settings.mqtt.MQTT_QOS,
+                retain=True
+            )
+        except Exception as e:
+            logger.warning(f"Error publicando status {status}: {e}")
 
 
-_mqtt_service_instance: Optional[MQTTService] = None
+# Singleton
+
+_mqtt_instance: Optional[MQTTService] = None
 
 
 def get_mqtt_service() -> MQTTService:
+    """Obtener instancia singleton del servicio MQTT"""
+    global _mqtt_instance
+    if _mqtt_instance is None:
+        _mqtt_instance = MQTTService()
+    return _mqtt_instance
+
+
+async def mqtt_lifespan_manager():
     """
-    Obtener instancia singleton de MQTTService
+    Context manager para lifespan de FastAPI.
     
-    Uso en FastAPI:
-        from app.services.mqtt_service import get_mqtt_service
+    Uso en main.py:
+        from contextlib import asynccontextmanager
+        from mosquitto.mqtt_service import mqtt_lifespan_manager, get_mqtt_service
         
-        mqtt = get_mqtt_service()
-        mqtt.publish_task(aseguradora="hdi", task_data={...})
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            async with mqtt_lifespan_manager():
+                yield
+        
+        app = FastAPI(lifespan=lifespan)
     """
-    global _mqtt_service_instance
-    if _mqtt_service_instance is None:
-        _mqtt_service_instance = MQTTService()
-    return _mqtt_service_instance
+    mqtt = get_mqtt_service()
+    await mqtt.connect()
+    try:
+        yield mqtt
+    finally:
+        await mqtt.disconnect()
 
 
-def mqtt_service_factory():
+async def get_mqtt_dependency() -> MQTTService:
     """
-    Factory para dependency injection en FastAPI
+    Dependency injection para endpoints FastAPI.
     
     Uso:
-        from fastapi import Depends
-        from app.services.mqtt_service import mqtt_service_factory
-        
-        @app.post("/cotizaciones/hdi")
-        async def endpoint(mqtt = Depends(mqtt_service_factory)):
-            mqtt.publish_task(aseguradora="hdi", task_data={...})
+        @app.post("/cotizaciones/{aseguradora}")
+        async def crear_cotizacion(
+            aseguradora: str,
+            data: CotizacionRequest,
+            mqtt: MQTTService = Depends(get_mqtt_dependency)
+        ):
+            await mqtt.publish_task(aseguradora, data.dict())
     """
-    return get_mqtt_service()
+    mqtt = get_mqtt_service()
+    if not mqtt.connected:
+        await mqtt.connect()
+    return mqtt
+
+
+@asynccontextmanager
+async def mqtt_worker_context(
+    handler: MessageHandler,
+    topic: Optional[str] = None,
+    reconnect_interval: float = 5.0
+):
+    """
+    Context manager para workers que procesan mensajes.
+    Incluye reconexión automática.
+    
+    Uso:
+        async def handle_task(topic: str, data: dict):
+            aseguradora = topic.split("/")[-1]
+            bot = get_bot(aseguradora)
+            await bot.run(data["payload"])
+        
+        async with mqtt_worker_context(handle_task) as mqtt:
+            # El worker corre hasta que se interrumpa
+            pass
+    """
+    mqtt = MQTTService()
+    
+    while True:
+        try:
+            async with mqtt:
+                # Suscribirse
+                if topic:
+                    await mqtt.subscribe(topic)
+                else:
+                    await mqtt.subscribe_wildcard()
+                
+                # Procesar mensajes
+                async for msg_topic, data in mqtt.messages():
+                    try:
+                        await handler(msg_topic, data)
+                    except Exception as e:
+                        logger.error(f"Error en handler: {e}")
+                
+        except aiomqtt.MqttError as e:
+            logger.warning(f"Conexión MQTT perdida: {e}. Reconectando en {reconnect_interval}s...")
+            await asyncio.sleep(reconnect_interval)
+        except asyncio.CancelledError:
+            logger.info("Worker MQTT cancelado")
+            break
+    
+    yield mqtt

@@ -4,8 +4,8 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0 #                      
 pydantic-settings==2.1.0 #
 
-# Message Broker (MQTT)
-paho-mqtt==1.6.1 #
+# MQTT
+aiomqtt==2.3.0 #
 
 # Browser Automation
 selenium==4.15.2

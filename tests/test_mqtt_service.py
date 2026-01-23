@@ -7,9 +7,8 @@ mosquitto -p 1883 -v
 pytest -m mqtt -v
 """
 
-import time
+import asyncio
 import pytest
-from unittest.mock import patch
 
 from mosquitto.mqtt_service import MQTTService
 
@@ -17,109 +16,91 @@ from mosquitto.mqtt_service import MQTTService
 @pytest.mark.mqtt
 class TestMQTTQueueBasic:
     """
-    Tests básicos para validar que la cola MQTT funciona
+    Tests básicos para validar que la cola MQTT funciona (async)
     """
 
-    def test_publish_and_subscribe_single_aseguradora(self):
+    @pytest.mark.asyncio
+    async def test_publish_and_subscribe_single_aseguradora(self):
         """
         Un cliente publica en bots/queue/hdi
         Otro cliente se suscribe a bots/queue/hdi
         El mensaje debe llegar correctamente.
         """
-            
         received_messages = []
 
-        def on_message(topic, message):
-            received_messages.append((topic, message))
+        async with MQTTService() as subscriber:
+            await subscriber.subscribe_aseguradora("hdi")
+            
+            async with MQTTService() as producer:
+                # Publicar tarea
+                task = {
+                    "job_id": "job-test-001",
+                    "payload": {"foo": "bar"}
+                }
+                published = await producer.publish_task("hdi", task)
+                assert published is True
 
-        # Subscriber (simula un bot)
-        subscriber = MQTTService()
-        assert subscriber.connect() is True
-        subscriber.subscribe_aseguradora("hdi", callback=on_message)
-        subscriber.loop_start()
-        self._wait_until_connected(subscriber)
-
-        # Producer (simula la API)
-        producer = MQTTService()
-        assert producer.connect() is True
-        producer.loop_start()
-        self._wait_until_connected(producer)
-
-        # Publicar tarea
-        task = {
-            "job_id": "job-test-001",
-            "payload": {"foo": "bar"}
-        }
-
-        published = producer.publish_task("hdi", task)
-        assert published is True
-
-        self._wait_for_messages(received_messages, expected=1)
-
-        subscriber.loop_stop()
-        producer.loop_stop()
+            # Recibir mensaje con timeout
+            try:
+                async with asyncio.timeout(3):
+                    async for topic, message in subscriber.messages():
+                        received_messages.append((topic, message))
+                        break  # Solo esperamos 1 mensaje
+            except asyncio.TimeoutError:
+                pass
 
         assert len(received_messages) == 1
         topic, message = received_messages[0]
-
         assert topic.endswith("/hdi")
         assert message["job_id"] == "job-test-001"
         assert message["payload"]["foo"] == "bar"
 
-
-    def test_publish_and_subscribe_wildcard(self):
+    @pytest.mark.asyncio
+    async def test_publish_and_subscribe_wildcard(self):
         """
         Un cliente se suscribe a bots/queue/+
         Debe recibir mensajes de cualquier aseguradora.
         """
-            
         received = []
 
-        def on_any(topic, message):
-            received.append((topic, message))
+        async with MQTTService() as subscriber:
+            await subscriber.subscribe_wildcard()
+            
+            async with MQTTService() as producer:
+                # Publicar tareas a distintas aseguradoras
+                await producer.publish_task("hdi", {"job_id": "job-hdi", "payload": {}})
+                await producer.publish_task("sura", {"job_id": "job-sura", "payload": {}})
+                await producer.publish_task("mapfre", {"job_id": "job-mapfre", "payload": {}})
 
-        # Subscriber genérico (worker global)
-        wildcard_subscriber = MQTTService()
-        assert wildcard_subscriber.connect() is True
-        wildcard_subscriber.subscribe_wildcard(callback=on_any)
-        wildcard_subscriber.loop_start()
-        self._wait_until_connected(wildcard_subscriber)
-
-        # Producer
-        producer = MQTTService()
-        assert producer.connect() is True
-        producer.loop_start()
-        self._wait_until_connected(producer)
-
-        # Publicar tareas a distintas aseguradoras
-        producer.publish_task("hdi", {"job_id": "job-hdi", "payload": {}})
-        producer.publish_task("sura", {"job_id": "job-sura", "payload": {}})
-        producer.publish_task("mapfre", {"job_id": "job-mapfre", "payload": {}})
-
-        self._wait_for_messages(received, expected=3)
-
-        wildcard_subscriber.loop_stop()
-        producer.loop_stop()
+            # Recibir mensajes con timeout
+            try:
+                async with asyncio.timeout(5):
+                    async for topic, message in subscriber.messages():
+                        received.append((topic, message))
+                        if len(received) >= 3:
+                            break
+            except asyncio.TimeoutError:
+                pass
 
         # Deben llegar las 3 tareas
         assert len(received) == 3
-
         job_ids = {msg["job_id"] for _, msg in received}
         assert job_ids == {"job-hdi", "job-sura", "job-mapfre"}
 
+    @pytest.mark.asyncio
+    async def test_connect_disconnect(self):
+        """Test de conexión y desconexión básica"""
+        mqtt = MQTTService()
+        
+        assert mqtt.connected is False
+        await mqtt.connect()
+        assert mqtt.connected is True
+        await mqtt.disconnect()
+        assert mqtt.connected is False
 
-    @staticmethod
-    def _wait_until_connected(mqtt_service, timeout=5):
-        start = time.time()
-        while not mqtt_service.connected:
-            if time.time() - start > timeout:
-                raise TimeoutError("MQTT no se conectó a tiempo")
-            time.sleep(0.05)
-
-    @staticmethod
-    def _wait_for_messages(container, expected, timeout=5):
-        start = time.time()
-        while len(container) < expected:
-            if time.time() - start > timeout:
-                break
-            time.sleep(0.05)
+    @pytest.mark.asyncio
+    async def test_publish_without_connection_fails(self):
+        """Publicar sin conexión debe retornar False"""
+        mqtt = MQTTService()
+        result = await mqtt.publish_task("hdi", {"job_id": "test"})
+        assert result is False

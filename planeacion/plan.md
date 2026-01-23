@@ -32,35 +32,40 @@ Crear un servidor modular de automatizacion con bots Selenium orchestrados por u
 ### Componentes Principales
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│              Docker Container (MVP Ligero)                          │
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐          │
-│  │   FastAPI    │  │   Mosquitto  │  │     Workers       │          │
-│  │   (API)      │  │   (MQTT)     │  │    (Python)       │          │
-│  │              │  │              │  │                   │          │
-│  │ Port 8000    │  │ Port 1883    │  │ • Selenium Bots   │          │
-│  │              │  │              │  │ • PDF Upload      │          │
-│  │ • Routes     │  │ Topics:      │  │ • Error Handler   │          │
-│  │ • Health     │  │ • queue/*    │  │ • FIFO Process    │          │
-│  │ • Auth       │  │              │  │                   │          │
-│  └──────────────┘  │              │  └───────────────────┘          │
-│         ↑          │              │          ↓ ↓ ↓                  │
-│         └──────────┴──────────────┴──────────┘ │ │                  │
-│              Pub/Sub Messages (MQTT)           │ │                  │
-│              (Sin persistencia)                │ │                  │
-└────────────────────────────────────────────────┼─┼──────────────────┘
-         ↑                                       │ │
-         │ 1. POST /api/{aseguradora}/cotizar    │ │
-         │ 2. GET /api/jobs/{id}                 │ │
-         │                                       │ │
-      (App Web) ←────────────────────────────────┴─┤
-         ^                PDFs                     │
-         │                                         │
-         └─────────────────────────────────────────┘
-                        Errores
-                 POST /api/errores
-                 {"job_id", "error", "timestamp"}
+┌─────────────────────────────────────────────────────────────────┐
+│                         FastAPI Server                          │
+│  ┌─────────────────┐                                            │
+│  │ lifespan_manager│──► MQTT.connect() al iniciar               │
+│  └─────────────────┘                                            │
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                     │
+│  │ POST /cotizar   │───►│get_mqtt_dependency│                   │
+│  │ {aseguradora}   │    │   (inyectado)    │                    │
+│  └─────────────────┘    └────────┬─────────┘                    │
+│                                  │                              │
+│                                  ▼                              │
+│                    await mqtt.publish_task("hdi", {...})        │
+└──────────────────────────────────┬──────────────────────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────┐
+                    │     Mosquitto Broker     │
+                    │   topic: bots/queue/hdi  │
+                    └──────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Worker Process                             │
+│  ┌─────────────────────────────────────────────────────┐        │
+│  │ mqtt_worker_context(handle_task)                    │        │
+│  │   ├─ subscribe("bots/queue/+")                      │        │
+│  │   └─ async for topic, data in mqtt.messages():      │        │
+│  │         await handle_task(topic, data)  ──────────────► Bot  │
+│  │         └─ Ejecutar Selenium                        │        │
+│  └─────────────────────────────────────────────────────┘        │
+│                                                                 │
+│  Reconexión automática si se pierde conexión                    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Flujo de Ejecucion
