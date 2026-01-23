@@ -1,0 +1,113 @@
+"""
+BrokerWiz API - Orquestador de Bots de Cotización
+
+API REST que recibe solicitudes de cotización y las encola en MQTT
+para ser procesadas por workers (bots de Selenium).
+"""
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from config.settings import settings
+from mosquitto.mqtt_service import (
+    configure_event_loop,
+    mqtt_lifespan_manager,
+    get_mqtt_service
+)
+
+# Configurar event loop ANTES de cualquier operación async
+configure_event_loop()
+
+# Configurar logging
+logging.basicConfig(
+    level=getattr(logging, settings.general.LOG_LEVEL),
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan manager de FastAPI.
+    
+    - Startup: Conecta el cliente MQTT singleton
+    - Shutdown: Desconecta limpiamente
+    """
+    logger.info("Iniciando BrokerWiz API...")
+    
+    # Conectar MQTT
+    async with mqtt_lifespan_manager():
+        mqtt = get_mqtt_service()
+        logger.info(f"MQTT conectado: {mqtt.client_id}")
+        
+        yield  # La aplicación corre aquí
+        
+    logger.info("BrokerWiz API detenida")
+
+
+# Crear aplicación
+app = FastAPI(
+    title="BrokerWiz API",
+    description="""
+    ## Orquestador de Bots de Cotización
+    
+    API para encolar tareas de cotización que serán procesadas por bots 
+    de Selenium conectados vía MQTT.
+    
+    ### Autenticación
+    
+    Todos los endpoints (excepto `/health`) requieren Bearer token:
+    
+    ```
+    Authorization: Bearer <API_KEY>
+    ```
+    
+    ### Flujo
+    
+    1. Cliente envía `POST /cotizaciones/{aseguradora}` con payload
+    2. API encola mensaje en topic MQTT `bots/queue/{aseguradora}`
+    3. Worker disponible recibe la tarea y ejecuta el bot
+    """,
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# CORS - Permitir llamadas desde frontend si es necesario
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://orquestadorbots.brokerwiz.co",
+        "https://brokerwiz.co",
+        "http://localhost:3000",  # Dev frontend
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+
+# Registrar routers
+from app.routes import health, cotizaciones
+
+app.include_router(health.router)
+app.include_router(cotizaciones.router, prefix="/api")
+
+
+# Entry point para desarrollo
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "app.main:app",
+        host=settings.api.API_HOST,
+        port=settings.api.API_PORT,
+        reload=settings.general.DEBUG,
+        log_level=settings.general.LOG_LEVEL.lower()
+    )
