@@ -98,17 +98,7 @@ else
 fi
 
 # ============================================================================
-# 5. Crear directorios necesarios
-# ============================================================================
-
-log_info "Creando directorios..."
-
-mkdir -p logs storage/screenshots storage/temp
-
-log_ok "Directorios creados"
-
-# ============================================================================
-# 6. Verificar instalación
+# 5. Verificar instalación
 # ============================================================================
 
 log_info "Verificando instalación..."

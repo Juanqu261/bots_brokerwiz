@@ -202,25 +202,6 @@ class SeleniumSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
-class StorageSettings(BaseSettings):
-    """Configuracion de almacenamiento (screenshots, archivos temporales)"""
-    
-    STORAGE_PATH: str = Field(
-        default="./storage",
-        description="Ruta base para almacenamiento"
-    )
-    STORAGE_SCREENSHOTS: bool = Field(
-        default=True,
-        description="Guardar screenshots para debugging"
-    )
-    STORAGE_MAX_AGE_DAYS: int = Field(
-        default=7,
-        description="Dias antes de limpiar archivos viejos"
-    )
-    
-    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
-
-
 class SecuritySettings(BaseSettings):
     """Configuracion de seguridad y CORS"""
     
@@ -268,7 +249,6 @@ class Settings(BaseSettings):
     workers: WorkersSettings = WorkersSettings()
     app_web: AppWebSettings = AppWebSettings()
     selenium: SeleniumSettings = SeleniumSettings()
-    storage: StorageSettings = StorageSettings()
     security: SecuritySettings = SecuritySettings()
     
     # Shortcuts para acceso directo
