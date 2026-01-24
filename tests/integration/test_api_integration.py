@@ -6,7 +6,7 @@ Requieren que el broker MQTT esté corriendo.
 
 Ejecutar:
     # Primero iniciar Mosquitto
-    docker compose up -d mqtt
+    mosquitto -p 1883 -v
     
     # Luego correr tests de integración
     pytest tests/integration/test_api_integration.py -v -m integration
@@ -15,11 +15,9 @@ Ejecutar:
     pytest -m integration -v
 """
 
-import asyncio
-import json
 import pytest
+import asyncio
 from datetime import datetime
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -29,8 +27,6 @@ from mosquitto.mqtt_service import MQTTService, configure_event_loop
 # Configurar event loop
 configure_event_loop()
 
-
-# Marcar todos los tests de este archivo como de integración
 pytestmark = pytest.mark.integration
 
 
@@ -105,7 +101,7 @@ class TestAPIWithRealMQTT:
         solicitud_id = f"integration-test-{datetime.now().timestamp()}"
         
         response = client.post(
-            "/api/cotizaciones/hdi",
+            "/api/hdi/cotizar",
             headers=auth_headers,
             json={
                 "solicitud_aseguradora_id": solicitud_id,
@@ -131,7 +127,7 @@ class TestAPIWithRealMQTT:
         
         for aseg in aseguradoras:
             response = client.post(
-                f"/api/cotizaciones/{aseg}",
+                f"/api/{aseg}/cotizar",
                 headers=auth_headers,
                 json={
                     "solicitud_aseguradora_id": f"multi-test-{aseg}",
@@ -241,7 +237,7 @@ class TestPerformance:
         start = time.time()
         
         response = client.post(
-            "/api/cotizaciones/hdi",
+            "/api/hdi/cotizar",
             headers=auth_headers,
             json={"solicitud_aseguradora_id": "perf-test", "payload": {}}
         )
