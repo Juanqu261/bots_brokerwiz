@@ -28,3 +28,21 @@ nano .env
 ./scripts/api.sh status
 curl http://127.0.0.1:8000/health
 ```
+
+## Agregar servicio api a nginx
+```
+# Agregar a /etc/nginx/sites-available/default 
+# O crear /etc/nginx/sites-available/brokerwiz
+
+server {
+    listen 80;
+    server_name orquestadorbots.brokerwiz.co;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```

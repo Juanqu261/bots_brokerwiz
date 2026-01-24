@@ -11,7 +11,12 @@
 
 set -e
 
+# Detectar directorio del proyecto
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
 MOSQUITTO_DATA="/var/lib/mosquitto"
+BROKERWIZ_LOGS="${PROJECT_DIR}/logs"
 
 # Colores
 GREEN='\033[0;32m'
@@ -38,8 +43,9 @@ cmd_setup() {
     apt-get install -y -qq mosquitto mosquitto-clients
 
     log_info "Configurando persistencia..."
-    mkdir -p $MOSQUITTO_DATA /var/log/mosquitto
-    chown mosquitto:mosquitto $MOSQUITTO_DATA /var/log/mosquitto
+    mkdir -p $MOSQUITTO_DATA "$BROKERWIZ_LOGS"
+    chown mosquitto:mosquitto $MOSQUITTO_DATA
+    chmod 755 "$BROKERWIZ_LOGS"
 
     cat > /etc/mosquitto/conf.d/brokerwiz.conf <<EOF
 # BrokerWiz - Mosquitto con persistencia
@@ -56,18 +62,40 @@ autosave_interval 60
 max_queued_messages 1000
 max_inflight_messages 100
 
-# Logs
-log_dest file /var/log/mosquitto/mosquitto.log
+# Logs - Archivo separado para Mosquitto en carpeta del proyecto
+log_dest file ${BROKERWIZ_LOGS}/mosquitto.log
+log_dest stdout
 log_type error
 log_type warning
 log_type notice
+log_type information
 log_timestamp true
 EOF
+
+    # Configurar logrotate para Mosquitto (rotación diaria, mantener 1 día)
+    cat > /etc/logrotate.d/brokerwiz-mosquitto <<EOF
+${BROKERWIZ_LOGS}/mosquitto.log {
+    daily
+    rotate 1
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}
+EOF
+
+    # Dar permisos a mosquitto para escribir en logs
+    touch "$BROKERWIZ_LOGS/mosquitto.log"
+    chown mosquitto:mosquitto "$BROKERWIZ_LOGS/mosquitto.log"
 
     systemctl enable mosquitto
     systemctl restart mosquitto
 
-    log_ok "Mosquitto configurado con persistencia en $MOSQUITTO_DATA"
+    log_ok "Mosquitto configurado"
+    log_ok "Logs en: $BROKERWIZ_LOGS/mosquitto.log"
     echo ""
     cmd_healthcheck
 }

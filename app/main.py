@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
+from config.logging_config import setup_logging
 from mosquitto.mqtt_service import (
     configure_event_loop,
     mqtt_lifespan_manager,
@@ -22,11 +23,7 @@ from mosquitto.mqtt_service import (
 configure_event_loop()
 
 # Configurar logging
-logging.basicConfig(
-    level=getattr(logging, settings.general.LOG_LEVEL),
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
+setup_logging(service_name="api")
 logger = logging.getLogger(__name__)
 
 
@@ -90,11 +87,11 @@ app.add_middleware(
 
 
 # Registrar routers
-from app.routes import health, cotizaciones
+from app.routes import health, cotizaciones, logs
 
 app.include_router(health.router)
 app.include_router(cotizaciones.router, prefix="/api")
-
+app.include_router(logs.router)
 
 # Entry point para desarrollo
 if __name__ == "__main__":
