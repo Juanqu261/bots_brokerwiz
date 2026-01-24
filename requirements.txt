@@ -1,27 +1,27 @@
 # Core API & Web Framework
-fastapi==0.104.1 #
-uvicorn[standard]==0.24.0 #
-pydantic==2.5.0 #                      
-pydantic-settings==2.1.0 #
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0                    
+pydantic-settings==2.1.0
 
 # MQTT
-aiomqtt==2.3.0 #
+aiomqtt==2.3.0
 
 # Browser Automation
-selenium==4.15.2
-webdriver-manager==4.0.1
+# selenium==4.15.2
+# webdriver-manager==4.0.1
 
 # HTTP Client
 httpx==0.25.2
-requests==2.31.0
+# requests==2.31.0
 
 # Retry Logic
-tenacity==8.2.3
+# tenacity==8.2.3
 
 # PDF/Document handling
 # pypdf==3.17.1
 # python-pptx==0.6.21
 
 # Utils
-python-dotenv==1.0.0
-pytz==2023.3
+# python-dotenv==1.0.0
+# pytz==2023.3

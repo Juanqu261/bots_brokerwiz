@@ -69,7 +69,7 @@ app = FastAPI(
     
     ### Flujo
     
-    1. Cliente envía `POST /cotizaciones/{aseguradora}` con payload
+    1. Cliente envía `POST /api/{aseguradora}/cotizar` con payload
     2. API encola mensaje en topic MQTT `bots/queue/{aseguradora}`
     3. Worker disponible recibe la tarea y ejecuta el bot
     """,
@@ -79,17 +79,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS - Permitir llamadas desde frontend si es necesario
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://orquestadorbots.brokerwiz.co",
-        "https://brokerwiz.co",
-        "http://localhost:3000",  # Dev frontend
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_origins=settings.security.CORS_ORIGINS_LIST,
+    allow_credentials=settings.security.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.security.CORS_ALLOW_METHODS_LIST,
+    allow_headers=["*"] if settings.security.CORS_ALLOW_HEADERS == "*" else settings.security.CORS_ALLOW_HEADERS.split(","),
 )
 
 

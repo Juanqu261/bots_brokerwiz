@@ -8,8 +8,8 @@ para ser procesadas por los workers (bots de Selenium).
 from enum import Enum
 from uuid import uuid4
 from datetime import datetime
-from pydantic import BaseModel, Field
-from typing import Any, Dict, Optional
+from pydantic import BaseModel, Field, RootModel
+from typing import Any, Dict, List, Optional
 
 
 class JobStatus(str, Enum):
@@ -64,6 +64,13 @@ class JobCreate(BaseModel):
             }
         }
     }
+
+
+class BatchJobItem(BaseModel):
+    """Item individual para batch de cotizaciones."""
+    aseguradora: str = Field(..., description="Nombre de la aseguradora")
+    solicitud_aseguradora_id: str = Field(..., description="ID de la solicitud")
+    payload: Dict[str, Any] = Field(default_factory=dict, description="Datos para el bot")
 
 
 class Job(BaseModel):

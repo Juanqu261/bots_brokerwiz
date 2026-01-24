@@ -15,3 +15,48 @@ def event_loop_policy():
     if sys.platform == "win32":
         return asyncio.WindowsSelectorEventLoopPolicy()
     return asyncio.DefaultEventLoopPolicy()
+
+
+@pytest.fixture
+def api_key():
+    """API key para autenticación."""
+    from config.settings import settings
+    return settings.api.API_KEY
+
+
+@pytest.fixture
+def auth_headers(api_key):
+    """Headers de autenticación válidos."""
+    return {"Authorization": f"Bearer {api_key}"}
+
+
+@pytest.fixture
+def sample_cotizacion_hdi():
+    """Payload de ejemplo para cotización HDI."""
+    return {
+        "solicitud_aseguradora_id": "test-hdi-123",
+        "payload": {
+            "in_strTipoDoc": "CC",
+            "in_strNumDoc": "1234567890",
+            "in_strNombre": "Juan",
+            "in_strApellido": "Test",
+            "in_strPlaca": "TEST123",
+            "in_strModelo": "2024"
+        }
+    }
+
+
+@pytest.fixture
+def sample_cotizacion_sura():
+    """Payload de ejemplo para cotización SURA."""
+    return {
+        "solicitud_aseguradora_id": "test-sura-456",
+        "payload": {
+            "in_strNumDoc": "1234567890",
+            "in_strNombreCompleto": "Juan Test",
+            "in_strApellidoCompleto": "Pérez García",
+            "in_strPlaca": "TEST456",
+            "in_strModelo": "2024"
+        }
+    }
+

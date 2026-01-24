@@ -117,7 +117,7 @@ class WorkersSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
-class AppWebIntegrationSettings(BaseSettings):
+class AppWebSettings(BaseSettings):
     """Configuracion de integracion con app-web"""
     
     APP_WEB_BASE_URL: str = Field(
@@ -220,28 +220,6 @@ class StorageSettings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
-class LoggingSettings(BaseSettings):
-    """Configuracion de logging"""
-    
-    LOG_FORMAT: str = Field(
-        default="json",
-        description="Formato de logs: json, plain"
-    )
-    LOG_FILE: str = Field(
-        default="logs/broker_wiz.log",
-        description="Archivo de log principal"
-    )
-    LOG_FILE_MAX_MB: int = Field(
-        default=100,
-        description="Tamaño maximo en MB antes de rotar logs"
-    )
-    LOG_FILE_BACKUP_COUNT: int = Field(
-        default=10,
-        description="Numero de backups de logs a mantener"
-    )
-    
-    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
-
 
 class SecuritySettings(BaseSettings):
     """Configuracion de seguridad y CORS"""
@@ -276,25 +254,6 @@ class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
-class FeatureFlagsSettings(BaseSettings):
-    """Flags para habilitar/deshabilitar features"""
-    
-    FEATURE_WEBHOOK_NOTIFICATIONS: bool = Field(
-        default=False,
-        description="Habilitar notificaciones por webhook"
-    )
-    FEATURE_PERSISTENT_JOBS: bool = Field(
-        default=False,
-        description="Persistencia de jobs en base de datos"
-    )
-    FEATURE_ADMIN_UI: bool = Field(
-        default=True,
-        description="Habilitar dashboard admin"
-    )
-    
-    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
-
-
 class Settings(BaseSettings):
     """
     Clase principal que agrupa todas las configuraciones
@@ -307,13 +266,10 @@ class Settings(BaseSettings):
     api: APISettings = APISettings()
     mqtt: MQTTSettings = MQTTSettings()
     workers: WorkersSettings = WorkersSettings()
-    app_web: AppWebIntegrationSettings = AppWebIntegrationSettings()
-    pdf_upload: PDFUploadSettings = PDFUploadSettings()
+    app_web: AppWebSettings = AppWebSettings()
     selenium: SeleniumSettings = SeleniumSettings()
     storage: StorageSettings = StorageSettings()
-    logging: LoggingSettings = LoggingSettings()
     security: SecuritySettings = SecuritySettings()
-    feature_flags: FeatureFlagsSettings = FeatureFlagsSettings()
     
     # Shortcuts para acceso directo
     @property
@@ -376,13 +332,10 @@ from config.settings import settings
 
 host = settings.API_HOST
 port = settings.API_PORT
-redis_url = settings.REDIS_URL
 
 # Opcion 2: Acceso a subgrupos
 from config.settings import settings
-
-redis_host = settings.redis.REDIS_HOST
-chrome_args = settings.selenium.SELENIUM_CHROME_ARGS
+api_host = settings.api.API_HOST}
 
 # Opcion 3: Via funcion
 from config.settings import get_settings
