@@ -136,6 +136,30 @@ class MQTTService:
         """Topic wildcard para todas las aseguradoras: bots/queue/+"""
         return f"{self.topic_prefix}/queue/+"
     
+    def get_shared_topic(self, topic: str, group: str = "workers") -> str:
+        """
+        Genera topic con shared subscription (MQTT 5).
+        
+        Shared subscriptions permiten que múltiples workers se suscriban
+        al mismo topic, pero cada mensaje se entrega a UN SOLO worker
+        del grupo (round-robin).
+        
+        Args:
+            topic: Topic base (ej: "bots/queue/hdi" o "bots/queue/+")
+            group: Nombre del grupo de workers (default: "workers")
+        
+        Returns:
+            Topic con prefijo $share (ej: "$share/workers/bots/queue/hdi")
+        
+        Ejemplo:
+            # Sin shared (todos reciben):
+            bots/queue/hdi → Worker1, Worker2, Worker3 (todos)
+            
+            # Con shared (solo uno recibe):
+            $share/workers/bots/queue/hdi → Worker2 (round-robin)
+        """
+        return f"$share/{group}/{topic}"
+    
     @property
     def lwt_topic(self) -> str:
         """Topic para Last Will Testament"""
@@ -286,6 +310,46 @@ class MQTTService:
         """Suscribirse a todas las aseguradoras (bots/queue/+)"""
         logger.info("Escuchando todas las aseguradoras")
         return await self.subscribe(self.wildcard_topic)
+    
+    async def subscribe_shared(
+        self, 
+        group: str = "workers",
+        aseguradora: Optional[str] = None
+    ) -> bool:
+        """
+        Permite que múltiples workers compartan la carga de una cola.
+        Cada mensaje se entrega a UN SOLO worker del grupo (round-robin).
+        
+        Args:
+            group: Nombre del grupo de workers (default: "workers").
+                   Workers con el mismo grupo comparten mensajes.
+            aseguradora: Si se especifica, escucha solo esa aseguradora.
+                        Si es None, escucha todas (wildcard).
+        
+        Returns:
+            True si se suscribió exitosamente
+        
+        Ejemplos:
+            # Escuchar todas las aseguradoras (compartido)
+            await mqtt.subscribe_shared()
+            # → $share/workers/bots/queue/+
+            
+            # Escuchar solo HDI (compartido entre workers HDI)
+            await mqtt.subscribe_shared(group="workers-hdi", aseguradora="hdi")
+            # → $share/workers-hdi/bots/queue/hdi
+            
+            # Grupo separado para pruebas
+            await mqtt.subscribe_shared(group="test-workers")
+            # → $share/test-workers/bots/queue/+
+        """
+        if aseguradora:
+            base_topic = self.get_topic(aseguradora)
+        else:
+            base_topic = self.wildcard_topic
+        
+        shared_topic = self.get_shared_topic(base_topic, group)
+        logger.info(f"Suscripción compartida [{group}]: {shared_topic}")
+        return await self.subscribe(shared_topic)
     
     async def messages(self) -> AsyncIterator[tuple[str, Dict[str, Any]]]:
         """
@@ -449,11 +513,20 @@ async def get_mqtt_dependency() -> MQTTService:
 async def mqtt_worker_context(
     handler: MessageHandler,
     topic: Optional[str] = None,
+    group: str = "workers",
+    use_shared: bool = True,
     reconnect_interval: float = 5.0
 ):
     """
     Context manager para workers que procesan mensajes.
-    Incluye reconexión automática.
+    Incluye reconexión automática y shared subscriptions.
+    
+    Args:
+        handler: Función async que procesa cada mensaje (topic, data)
+        topic: Topic específico o None para wildcard
+        group: Nombre del grupo para shared subscriptions (default: "workers")
+        use_shared: Si True, usa shared subscriptions para evitar duplicados
+        reconnect_interval: Segundos entre intentos de reconexión
     
     Uso:
         async def handle_task(topic: str, data: dict):
@@ -461,20 +534,44 @@ async def mqtt_worker_context(
             bot = get_bot(aseguradora)
             await bot.run(data["payload"])
         
+        # Worker con shared subscription (recomendado)
         async with mqtt_worker_context(handle_task) as mqtt:
-            # El worker corre hasta que se interrumpa
             pass
+        
+        # Worker para aseguradora específica
+        async with mqtt_worker_context(
+            handle_task, 
+            topic="bots/queue/hdi",
+            group="workers-hdi"
+        ) as mqtt:
+            pass
+    
+    Comportamiento con shared subscriptions:
+    - Múltiples workers pueden correr simultáneamente
+    - Cada tarea se entrega a UN SOLO worker (round-robin)
+    - Worker ocupado procesando = broker pasa al siguiente worker
+    - Procesamiento secuencial garantiza distribución justa
     """
     mqtt = MQTTService()
     
     while True:
         try:
             async with mqtt:
-                # Suscribirse
-                if topic:
-                    await mqtt.subscribe(topic)
+                # Suscribirse (shared o normal)
+                if use_shared:
+                    if topic:
+                        # Topic específico con shared
+                        shared_topic = mqtt.get_shared_topic(topic, group)
+                        await mqtt.subscribe(shared_topic)
+                    else:
+                        # Wildcard con shared
+                        await mqtt.subscribe_shared(group=group)
                 else:
-                    await mqtt.subscribe_wildcard()
+                    # Suscripción normal (todos reciben)
+                    if topic:
+                        await mqtt.subscribe(topic)
+                    else:
+                        await mqtt.subscribe_wildcard()
                 
                 # Procesar mensajes
                 async for msg_topic, data in mqtt.messages():
