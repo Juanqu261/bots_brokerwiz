@@ -238,45 +238,6 @@ class TestCotizacionesEndpoint:
         assert call_args.kwargs["task_data"]["solicitud_aseguradora_id"] == "sol-123"
 
 
-class TestBatchEndpoint:
-    """Tests del endpoint POST /api/cotizaciones/batch."""
-    
-    def test_batch_multiple_aseguradoras(self, client, auth_headers, mock_mqtt_service):
-        """Batch procesa múltiples aseguradoras."""
-        response = client.post(
-            "/api/cotizaciones/batch",
-            headers=auth_headers,
-            json=[
-                {"aseguradora": "hdi", "solicitud_aseguradora_id": "batch-1", "payload": {}},
-                {"aseguradora": "sura", "solicitud_aseguradora_id": "batch-1", "payload": {}},
-                {"aseguradora": "axa", "solicitud_aseguradora_id": "batch-1", "payload": {}}
-            ]
-        )
-        
-        assert response.status_code == 202
-        data = response.json()
-        assert data["success"] is True
-        assert len(data["data"]) == 3
-        assert mock_mqtt_service.publish_task.call_count == 3
-    
-    def test_batch_ignora_aseguradoras_invalidas(self, client, auth_headers, mock_mqtt_service):
-        """Batch ignora aseguradoras inválidas y procesa las válidas."""
-        response = client.post(
-            "/api/cotizaciones/batch",
-            headers=auth_headers,
-            json=[
-                {"aseguradora": "hdi", "solicitud_aseguradora_id": "b1", "payload": {}},
-                {"aseguradora": "invalida", "solicitud_aseguradora_id": "b2", "payload": {}},
-                {"aseguradora": "sura", "solicitud_aseguradora_id": "b3", "payload": {}}
-            ]
-        )
-        
-        assert response.status_code == 202
-        data = response.json()
-        assert len(data["data"]) == 2  # Solo 2 válidas
-        assert "error" in data["message"].lower()
-
-
 class TestValidation:
     """Tests de validación de payloads."""
     

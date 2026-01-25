@@ -66,13 +66,6 @@ class JobCreate(BaseModel):
     }
 
 
-class BatchJobItem(BaseModel):
-    """Item individual para batch de cotizaciones."""
-    aseguradora: str = Field(..., description="Nombre de la aseguradora")
-    solicitud_aseguradora_id: str = Field(..., description="ID de la solicitud")
-    payload: Dict[str, Any] = Field(default_factory=dict, description="Datos para el bot")
-
-
 class Job(BaseModel):
     """Representación completa de un job."""
     job_id: str = Field(

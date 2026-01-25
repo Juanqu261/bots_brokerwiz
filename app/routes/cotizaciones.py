@@ -2,17 +2,15 @@
 Rutas de cotizaciones - Endpoints para encolar tareas.
 
 POST /api/{aseguradora}/cotizar - Encolar una cotización específica
-POST /api/cotizaciones/batch - Encolar múltiples cotizaciones
 """
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.middleware.auth import verify_token
 from app.models.responses import APIResponse, ErrorResponse
-from app.models.job import Aseguradora, BatchJobItem, Job, JobCreate, JobResponse, JobStatus
+from app.models.job import Aseguradora, Job, JobCreate, JobResponse, JobStatus
 
 from mosquitto.mqtt_service import MQTTService, get_mqtt_service
 
@@ -27,73 +25,6 @@ router = APIRouter(
         422: {"model": ErrorResponse, "description": "Error de validación"}
     }
 )
-
-
-@router.post(
-    "/cotizaciones/batch",
-    response_model=APIResponse[list[JobResponse]],
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Encolar múltiples cotizaciones",
-    description="Encola tareas para múltiples aseguradoras en una sola llamada."
-)
-async def crear_cotizaciones_batch(
-    jobs: List[BatchJobItem],
-    token: str = Depends(verify_token),
-    mqtt: MQTTService = Depends(get_mqtt_service)
-) -> APIResponse[list[JobResponse]]:
-    """
-    Encolar múltiples tareas de cotización.
-    
-    Body:
-    ```json
-    [
-        {"aseguradora": "hdi", "solicitud_aseguradora_id": "abc", "payload": {...}},
-        {"aseguradora": "sura", "solicitud_aseguradora_id": "abc", "payload": {...}}
-    ]
-    ```
-    """
-    results = []
-    errors = []
-    
-    for item in jobs:
-        aseguradora = item.aseguradora.lower()
-        
-        # Validar aseguradora
-        try:
-            aseg_enum = Aseguradora(aseguradora)
-        except ValueError:
-            errors.append(f"Aseguradora '{aseguradora}' no válida")
-            continue
-        
-        # Crear job
-        job = Job(
-            aseguradora=aseg_enum,
-            solicitud_aseguradora_id=item.solicitud_aseguradora_id,
-            payload=item.payload
-        )
-        
-        # Publicar
-        try:
-            await mqtt.publish_task(aseguradora, task_data=job.to_mqtt_message())
-            results.append(JobResponse(
-                job_id=job.job_id,
-                aseguradora=aseguradora,
-                status=JobStatus.PENDING,
-                message="Encolado",
-                queued_at=job.created_at
-            ))
-        except Exception as e:
-            errors.append(f"{aseguradora}: {str(e)}")
-    
-    message = f"{len(results)} tareas encoladas"
-    if errors:
-        message += f", {len(errors)} errores"
-    
-    return APIResponse(
-        success=len(results) > 0,
-        message=message,
-        data=results
-    )
 
 
 @router.post(

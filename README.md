@@ -89,7 +89,7 @@ Invoke-RestMethod http://localhost:8000/health
 ```powershell
 # Crear cotización HDI
 $headers = @{
-    "Authorization" = "Bearer dev-key-change-in-prod"
+    "Authorization" = "Bearer test-api-bots"
     "Content-Type" = "application/json"
 }
 
@@ -119,28 +119,6 @@ data    : @{job_id=abc123-uuid; aseguradora=hdi; status=pending; ...}
 En la **Terminal 2** (mosquitto_sub) deberías ver:
 ```
 bots/queue/hdi {"job_id": "abc123-uuid", "solicitud_aseguradora_id": "test-manual-001", "payload": {"in_strPlaca": "ABC123", "in_strNumDoc": "1234567890"}, ...}
-```
-
-### Probar batch (múltiples aseguradoras)
-
-```powershell
-$body = @(
-    @{ aseguradora = "hdi"; solicitud_aseguradora_id = "batch-001"; payload = @{} },
-    @{ aseguradora = "sura"; solicitud_aseguradora_id = "batch-001"; payload = @{} },
-    @{ aseguradora = "axa"; solicitud_aseguradora_id = "batch-001"; payload = @{} }
-) | ConvertTo-Json
-
-Invoke-RestMethod -Method POST `
-    -Uri "http://localhost:8000/api/cotizaciones/batch" `
-    -Headers $headers `
-    -Body $body
-```
-
-En mosquitto_sub verás 3 mensajes en topics distintos:
-```
-bots/queue/hdi {...}
-bots/queue/sura {...}
-bots/queue/axa {...}
 ```
 
 ### Consultar logs

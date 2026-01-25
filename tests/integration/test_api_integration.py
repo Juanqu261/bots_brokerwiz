@@ -137,23 +137,6 @@ class TestAPIWithRealMQTT:
             
             assert response.status_code == 202, f"Falló para {aseg}"
             assert response.json()["data"]["aseguradora"] == aseg
-    
-    def test_batch_con_mqtt_real(self, client, auth_headers):
-        """Batch publica múltiples mensajes en MQTT."""
-        response = client.post(
-            "/api/cotizaciones/batch",
-            headers=auth_headers,
-            json=[
-                {"aseguradora": "hdi", "solicitud_aseguradora_id": "batch-int-1", "payload": {}},
-                {"aseguradora": "sura", "solicitud_aseguradora_id": "batch-int-2", "payload": {}},
-                {"aseguradora": "bolivar", "solicitud_aseguradora_id": "batch-int-3", "payload": {}}
-            ]
-        )
-        
-        assert response.status_code == 202
-        data = response.json()
-        assert data["success"] is True
-        assert len(data["data"]) == 3
 
 
 @pytest.mark.asyncio
@@ -246,25 +229,3 @@ class TestPerformance:
         
         assert response.status_code == 202
         assert elapsed < 1.0, f"Publicación tardó {elapsed:.2f}s (esperado < 1s)"
-    
-    def test_batch_performance(self, client, auth_headers):
-        """Verificar que batch es eficiente."""
-        import time
-        
-        jobs = [
-            {"aseguradora": aseg, "solicitud_aseguradora_id": f"perf-{i}", "payload": {}}
-            for i, aseg in enumerate(["hdi", "sura", "axa", "allianz", "bolivar"])
-        ]
-        
-        start = time.time()
-        
-        response = client.post(
-            "/api/cotizaciones/batch",
-            headers=auth_headers,
-            json=jobs
-        )
-        
-        elapsed = time.time() - start
-        
-        assert response.status_code == 202
-        assert elapsed < 2.0, f"Batch de 5 tardó {elapsed:.2f}s (esperado < 2s)"
