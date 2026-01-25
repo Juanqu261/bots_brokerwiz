@@ -39,31 +39,52 @@ class JobCreate(BaseModel):
     """
     Payload para crear un nuevo job de cotización.
     
-    El payload específico depende de la aseguradora y se valida
-    en el mapper correspondiente.
+    El JSON de entrada usa los nombres estándar de la API de bots:
+    - in_strIDSolicitudAseguradora: ID de la solicitud
+    - Resto de campos: datos específicos del bot
     """
-    solicitud_aseguradora_id: str = Field(
+    in_strIDSolicitudAseguradora: str = Field(
         ...,
+        alias="in_strIDSolicitudAseguradora",
         description="ID único de la solicitud (viene del sistema externo)",
         examples=["abc123xyz"]
     )
     payload: Dict[str, Any] = Field(
-        ...,
+        default_factory=dict,
         description="Datos específicos para el bot de la aseguradora"
     )
     
     model_config = {
+        "populate_by_name": True,  # Permite usar tanto el alias como el nombre
         "json_schema_extra": {
             "example": {
-                "solicitud_aseguradora_id": "abc123xyz",
-                "payload": {
-                    "in_strTipoDoc": "CC",
-                    "in_strNumDoc": "1234567890",
-                    "in_strPlaca": "ABC123"
-                }
+                "in_strIDSolicitudAseguradora": "abc123xyz",
+                "in_strTipoDoc": "CC",
+                "in_strNumDoc": "1234567890",
+                "in_strPlaca": "ABC123",
+                "in_strNombre": "Juan",
+                "in_strApellido": "Pérez"
             }
         }
     }
+    
+    def __init__(self, **data):
+        """
+        Extrae in_strIDSolicitudAseguradora y agrupa el resto en payload.
+        
+        Esto permite enviar un JSON plano como en el documento de integración.
+        """
+        solicitud_id = data.pop("in_strIDSolicitudAseguradora", None)
+        
+        # Todo lo que no sea el ID va al payload
+        payload = data.pop("payload", {})
+        # Agregar campos adicionales al payload
+        payload.update({k: v for k, v in data.items()})
+        
+        super().__init__(
+            in_strIDSolicitudAseguradora=solicitud_id,
+            payload=payload
+        )
 
 
 class Job(BaseModel):
@@ -73,7 +94,10 @@ class Job(BaseModel):
         description="ID único del job generado por el sistema"
     )
     aseguradora: Aseguradora
-    solicitud_aseguradora_id: str
+    in_strIDSolicitudAseguradora: str = Field(
+        ...,
+        description="ID de la solicitud de aseguradora"
+    )
     payload: Dict[str, Any]
     status: JobStatus = JobStatus.PENDING
     created_at: datetime = Field(default_factory=datetime.now)
@@ -85,7 +109,7 @@ class Job(BaseModel):
         """Serializar para enviar por MQTT."""
         return {
             "job_id": self.job_id,
-            "solicitud_aseguradora_id": self.solicitud_aseguradora_id,
+            "in_strIDSolicitudAseguradora": self.in_strIDSolicitudAseguradora,
             "payload": self.payload,
             "created_at": self.created_at.isoformat()
         }

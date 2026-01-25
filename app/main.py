@@ -102,5 +102,6 @@ if __name__ == "__main__":
         host=settings.api.API_HOST,
         port=settings.api.API_PORT,
         reload=settings.general.DEBUG,
+        reload_excludes=["logs", "*.log", "logs/**"],  # Excluir carpeta logs del hot-reload
         log_level=settings.general.LOG_LEVEL.lower()
     )

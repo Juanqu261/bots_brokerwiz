@@ -337,6 +337,54 @@ class MQTTService:
         except Exception as e:
             logger.warning(f"Error publicando status {status}: {e}")
 
+    async def ping(self, timeout: float = 3.0) -> bool:
+        """
+        Verificar conexión real con el broker MQTT.
+        
+        Intenta publicar un mensaje de heartbeat con timeout.
+        Si el broker no responde o la conexión está rota, retorna False.
+        
+        Args:
+            timeout: Tiempo máximo de espera en segundos
+        
+        Returns:
+            True si el broker está accesible, False si no
+        """
+        if not self._client or not self._connected:
+            return False
+        
+        try:
+            # Intentar publicar un mensaje de heartbeat con timeout
+            heartbeat_topic = f"{self.topic_prefix}/heartbeat"
+            heartbeat_payload = json.dumps({
+                "client_id": self._client_id,
+                "timestamp": datetime.now().isoformat(),
+                "type": "ping"
+            })
+            
+            await asyncio.wait_for(
+                self._client.publish(
+                    topic=heartbeat_topic,
+                    payload=heartbeat_payload,
+                    qos=0  # QoS 0 para velocidad, no necesitamos confirmación
+                ),
+                timeout=timeout
+            )
+            return True
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout verificando conexión MQTT ({timeout}s)")
+            self._connected = False
+            return False
+        except aiomqtt.MqttError as e:
+            logger.warning(f"Error verificando conexión MQTT: {e}")
+            self._connected = False
+            return False
+        except Exception as e:
+            logger.error(f"Error inesperado en ping MQTT: {e}")
+            self._connected = False
+            return False
+
 
 # Singleton para FastAPI
 _mqtt_instance: Optional[MQTTService] = None

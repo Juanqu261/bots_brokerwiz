@@ -60,6 +60,11 @@ def app():
 @pytest.fixture
 def client(app, mqtt_available):
     """Cliente de test con MQTT real."""
+    from app.routes.health import reset_mqtt_cache
+    
+    # Resetear caché del health check para estado limpio
+    reset_mqtt_cache()
+    
     with TestClient(app) as c:
         yield c
 
@@ -104,11 +109,9 @@ class TestAPIWithRealMQTT:
             "/api/hdi/cotizar",
             headers=auth_headers,
             json={
-                "solicitud_aseguradora_id": solicitud_id,
-                "payload": {
-                    "in_strPlaca": "TEST123",
-                    "in_strNumDoc": "9999999999"
-                }
+                "in_strIDSolicitudAseguradora": solicitud_id,
+                "in_strPlaca": "TEST123",
+                "in_strNumDoc": "9999999999"
             }
         )
         
@@ -130,8 +133,8 @@ class TestAPIWithRealMQTT:
                 f"/api/{aseg}/cotizar",
                 headers=auth_headers,
                 json={
-                    "solicitud_aseguradora_id": f"multi-test-{aseg}",
-                    "payload": {"test": True}
+                    "in_strIDSolicitudAseguradora": f"multi-test-{aseg}",
+                    "in_strPlaca": "TEST123"
                 }
             )
             
@@ -222,7 +225,7 @@ class TestPerformance:
         response = client.post(
             "/api/hdi/cotizar",
             headers=auth_headers,
-            json={"solicitud_aseguradora_id": "perf-test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "perf-test"}
         )
         
         elapsed = time.time() - start

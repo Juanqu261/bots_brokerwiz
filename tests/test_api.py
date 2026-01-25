@@ -23,6 +23,7 @@ def mock_mqtt_service():
     mock.connected = True
     mock.client_id = "test-client"
     mock.publish_task = AsyncMock(return_value=True)
+    mock.ping = AsyncMock(return_value=True)
     mock.connect = AsyncMock()
     mock.disconnect = AsyncMock()
     return mock
@@ -34,6 +35,9 @@ def client(mock_mqtt_service):
     from fastapi import FastAPI
     from app.routes import health, cotizaciones
     from mosquitto.mqtt_service import get_mqtt_service
+    
+    # Resetear caché de health check entre tests
+    health.reset_mqtt_cache()
     
     # Crear app sin lifespan real (evita conexión MQTT)
     app = FastAPI(title="Test API")
@@ -98,7 +102,7 @@ class TestAuthentication:
         """Endpoint de cotización requiere autenticación."""
         response = client.post(
             "/api/hdi/cotizar",
-            json={"solicitud_aseguradora_id": "test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "test"}
         )
         
         assert response.status_code == 403  # Forbidden sin token
@@ -108,7 +112,7 @@ class TestAuthentication:
         response = client.post(
             "/api/hdi/cotizar",
             headers=invalid_auth_headers,
-            json={"solicitud_aseguradora_id": "test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "test"}
         )
         
         assert response.status_code == 401
@@ -119,14 +123,14 @@ class TestAuthentication:
         response = client.post(
             "/api/hdi/cotizar",
             headers=auth_headers,
-            json={"solicitud_aseguradora_id": "test-123", "payload": {"test": True}}
+            json={"in_strIDSolicitudAseguradora": "test-123", "in_strPlaca": "ABC123"}
         )
         
         assert response.status_code == 202
 
 
 class TestCotizacionesEndpoint:
-    """Tests del endpoint POST /api/cotizaciones/{aseguradora}."""
+    """Tests del endpoint POST /api/{aseguradora}/cotizar."""
     
     def test_crear_cotizacion_hdi(self, client, auth_headers):
         """Crear cotización HDI exitosamente."""
@@ -134,12 +138,10 @@ class TestCotizacionesEndpoint:
             "/api/hdi/cotizar",
             headers=auth_headers,
             json={
-                "solicitud_aseguradora_id": "abc123",
-                "payload": {
-                    "in_strTipoDoc": "CC",
-                    "in_strNumDoc": "1234567890",
-                    "in_strPlaca": "ABC123"
-                }
+                "in_strIDSolicitudAseguradora": "abc123",
+                "in_strTipoDoc": "CC",
+                "in_strNumDoc": "1234567890",
+                "in_strPlaca": "ABC123"
             }
         )
         
@@ -156,8 +158,8 @@ class TestCotizacionesEndpoint:
             "/api/sura/cotizar",
             headers=auth_headers,
             json={
-                "solicitud_aseguradora_id": "xyz789",
-                "payload": {"in_strPlaca": "XYZ789"}
+                "in_strIDSolicitudAseguradora": "xyz789",
+                "in_strPlaca": "XYZ789"
             }
         )
         
@@ -169,7 +171,7 @@ class TestCotizacionesEndpoint:
         response = client.post(
             "/api/aseguradora_fake/cotizar",
             headers=auth_headers,
-            json={"solicitud_aseguradora_id": "test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "test"}
         )
         
         assert response.status_code == 400
@@ -183,7 +185,7 @@ class TestCotizacionesEndpoint:
         response = client.post(
             "/api/HDI/cotizar",
             headers=auth_headers,
-            json={"solicitud_aseguradora_id": "test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "test"}
         )
         assert response.status_code == 202
         
@@ -191,26 +193,26 @@ class TestCotizacionesEndpoint:
         response = client.post(
             "/api/Sura/cotizar",
             headers=auth_headers,
-            json={"solicitud_aseguradora_id": "test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "test"}
         )
         assert response.status_code == 202
     
-    def test_payload_vacio_valido(self, client, auth_headers):
-        """Payload vacío es válido (la validación específica la hace el bot)."""
+    def test_payload_minimo_valido(self, client, auth_headers):
+        """Solo el ID de solicitud es requerido (el resto va al payload)."""
         response = client.post(
             "/api/hdi/cotizar",
             headers=auth_headers,
-            json={"solicitud_aseguradora_id": "test", "payload": {}}
+            json={"in_strIDSolicitudAseguradora": "test"}
         )
         
         assert response.status_code == 202
     
     def test_solicitud_id_requerido(self, client, auth_headers):
-        """solicitud_aseguradora_id es requerido."""
+        """in_strIDSolicitudAseguradora es requerido."""
         response = client.post(
             "/api/hdi/cotizar",
             headers=auth_headers,
-            json={"payload": {"test": True}}
+            json={"in_strPlaca": "ABC123"}
         )
         
         assert response.status_code == 422  # Validation error
@@ -221,8 +223,9 @@ class TestCotizacionesEndpoint:
             "/api/axa/cotizar",
             headers=auth_headers,
             json={
-                "solicitud_aseguradora_id": "sol-123",
-                "payload": {"campo": "valor"}
+                "in_strIDSolicitudAseguradora": "sol-123",
+                "in_strNumDoc": "1234567890",
+                "in_strPlaca": "ABC123"
             }
         )
         
@@ -235,7 +238,9 @@ class TestCotizacionesEndpoint:
         # El primer argumento posicional es aseguradora, task_data es keyword
         assert call_args.kwargs["aseguradora"] == "axa"
         assert "job_id" in call_args.kwargs["task_data"]
-        assert call_args.kwargs["task_data"]["solicitud_aseguradora_id"] == "sol-123"
+        assert call_args.kwargs["task_data"]["in_strIDSolicitudAseguradora"] == "sol-123"
+        # Verificar que los otros campos están en el payload
+        assert call_args.kwargs["task_data"]["payload"]["in_strNumDoc"] == "1234567890"
 
 
 class TestValidation:
@@ -286,7 +291,7 @@ class TestMQTTErrorHandling:
             response = client.post(
                 "/api/hdi/cotizar",
                 headers=auth_headers,
-                json={"solicitud_aseguradora_id": "test", "payload": {}}
+                json={"in_strIDSolicitudAseguradora": "test"}
             )
         
         assert response.status_code == 503
@@ -312,7 +317,7 @@ class TestMQTTErrorHandling:
             response = client.post(
                 "/api/hdi/cotizar",
                 headers=auth_headers,
-                json={"solicitud_aseguradora_id": "test", "payload": {}}
+                json={"in_strIDSolicitudAseguradora": "test"}
             )
         
         assert response.status_code == 503

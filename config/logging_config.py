@@ -49,6 +49,10 @@ def setup_logging(service_name: str = "api") -> logging.Logger:
     # Limpiar handlers existentes (evita duplicados en reloads)
     root_logger.handlers.clear()
     
+    # Silenciar loggers ruidosos que causan loops con watchfiles
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
+    
     # Formatter común
     formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
     

@@ -94,11 +94,9 @@ $headers = @{
 }
 
 $body = @{
-    solicitud_aseguradora_id = "test-manual-001"
-    payload = @{
-        in_strPlaca = "ABC123"
-        in_strNumDoc = "1234567890"
-    }
+    in_strIDSolicitudAseguradora = "test-manual-001"
+    in_strPlaca = "ABC123"
+    in_strNumDoc = "1234567890"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Method POST `
@@ -118,7 +116,7 @@ data    : @{job_id=abc123-uuid; aseguradora=hdi; status=pending; ...}
 
 En la **Terminal 2** (mosquitto_sub) deberías ver:
 ```
-bots/queue/hdi {"job_id": "abc123-uuid", "solicitud_aseguradora_id": "test-manual-001", "payload": {"in_strPlaca": "ABC123", "in_strNumDoc": "1234567890"}, ...}
+bots/queue/hdi {"job_id": "abc123-uuid", "in_strIDSolicitudAseguradora": "test-manual-001", "payload": {"in_strPlaca": "ABC123", "in_strNumDoc": "1234567890"}, ...}
 ```
 
 ### Consultar logs

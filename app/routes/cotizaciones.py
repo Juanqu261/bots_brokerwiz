@@ -66,7 +66,7 @@ async def crear_cotizacion(
     # Crear job
     job = Job(
         aseguradora=aseg_enum,
-        solicitud_aseguradora_id=data.solicitud_aseguradora_id,
+        in_strIDSolicitudAseguradora=data.in_strIDSolicitudAseguradora,
         payload=data.payload
     )
     
@@ -92,7 +92,7 @@ async def crear_cotizacion(
     
     logger.info(
         f"[{aseguradora_lower.upper()}] Job {job.job_id} encolado - "
-        f"Solicitud: {data.solicitud_aseguradora_id}"
+        f"Solicitud: {data.in_strIDSolicitudAseguradora}"
     )
     
     return APIResponse(
