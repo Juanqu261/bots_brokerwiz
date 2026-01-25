@@ -20,6 +20,7 @@ from config.logging_config import setup_logging
 from mosquitto.mqtt_service import configure_event_loop, MQTTService
 from workers.resource_manager import ResourceManager, ResourceUnavailableError
 from workers.bots import BaseBot
+from workers.bots.hdi_bot import HDIBot
 
 # Configurar logging al inicio
 logger = setup_logging("worker")
@@ -30,7 +31,7 @@ logger = setup_logging("worker")
 # Los bots se registran aquí conforme se implementan
 
 BOT_REGISTRY: dict[str, Type[BaseBot]] = {
-    # "hdi": HDIBot,
+    "hdi": HDIBot,
     # "sura": SURABot,
     # "axa": AXABot,
     # etc.
