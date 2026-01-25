@@ -223,9 +223,17 @@ class TestDriverManagerCookies:
 class TestDriverManagerConstants:
     """Tests de constantes y configuración."""
 
-    def test_chrome_args_contains_headless(self):
-        """CHROME_ARGS debe incluir headless."""
-        assert any("headless" in arg for arg in SeleniumDriverManager.CHROME_ARGS)
+    def test_chrome_args_base_does_not_contain_headless(self):
+        """CHROME_ARGS_BASE no debe incluir headless (se agrega dinámicamente)."""
+        assert not any(
+            "headless" in arg for arg in SeleniumDriverManager.CHROME_ARGS_BASE
+        )
+
+    def test_chrome_args_base_contains_no_sandbox(self):
+        """CHROME_ARGS_BASE debe incluir --no-sandbox."""
+        assert any(
+            "no-sandbox" in arg for arg in SeleniumDriverManager.CHROME_ARGS_BASE
+        )
 
     def test_has_timeout_constants(self):
         """Debe tener constantes de timeout definidas."""

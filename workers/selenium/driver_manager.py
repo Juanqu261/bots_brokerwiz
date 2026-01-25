@@ -23,6 +23,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
+from config.settings import settings
 from workers.selenium.cookies_manager import CookiesManager
 from workers.selenium.helpers import SeleniumHelpers
 
@@ -36,8 +37,8 @@ class SeleniumDriverManager(SeleniumHelpers):
     Hereda todos los helpers de SeleniumHelpers (wait_for, click, type_text, etc.)
     """
     
-    CHROME_ARGS = [
-        "--headless=new",
+    # Argumentos base de Chrome
+    CHROME_ARGS_BASE = [
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
@@ -92,7 +93,15 @@ class SeleniumDriverManager(SeleniumHelpers):
         """Creación síncrona del driver (ejecutada en thread)."""
         options = Options()
         
-        for arg in self.CHROME_ARGS:
+        # Headless en producción, visible en desarrollo/test para debugging
+        is_production = settings.general.ENVIRONMENT == "production"
+        if is_production:
+            options.add_argument("--headless=new")
+            logger.debug(f"[{self.bot_id}] Chrome en modo headless (production)")
+        else:
+            logger.info(f"[{self.bot_id}] Chrome en modo visible (ENVIRONMENT={settings.general.ENVIRONMENT})")
+        
+        for arg in self.CHROME_ARGS_BASE:
             options.add_argument(arg)
         
         prefs = {
