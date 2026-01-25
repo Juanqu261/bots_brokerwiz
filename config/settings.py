@@ -109,9 +109,9 @@ class WorkersSettings(BaseSettings):
         default=300,
         description="Timeout en segundos para cada job"
     )
-    WORKER_POLL_INTERVAL: int = Field(
-        default=1,
-        description="Intervalo en segundos para polling de MQTT"
+    MAX_CONCURRENT_BOTS: int = Field(
+        default=3,
+        description="Maximo de bots Selenium ejecutandose simultaneamente"
     )
     
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", case_sensitive=True, extra="ignore")

@@ -23,5 +23,6 @@ httpx==0.25.2
 # python-pptx==0.6.21
 
 # Utils
+psutil==5.9.5
 # python-dotenv==1.0.0
 # pytz==2023.3
