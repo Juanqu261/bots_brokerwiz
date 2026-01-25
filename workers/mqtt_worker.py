@@ -2,7 +2,6 @@
 Worker MQTT para procesar tareas de cotización.
 
 Escucha mensajes en bots/queue/+ y ejecuta el bot correspondiente.
-Funciona en Windows (desarrollo) y Linux (producción).
 
 Uso:
     python -m workers.mqtt_worker
