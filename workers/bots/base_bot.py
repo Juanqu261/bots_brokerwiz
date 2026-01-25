@@ -95,6 +95,23 @@ class BaseBot:
         self._setup_done = False
         self.logger.info(f"Bot {self.bot_id} finalizado para job {self.job_id}")
     
+    async def run(self) -> bool:
+        """
+        Ejecutar la lógica principal del bot.
+        
+        Este método debe ser implementado por cada bot específico.
+        Se ejecuta dentro del context manager (driver ya inicializado).
+        
+        Returns:
+            True si la cotización fue exitosa, False si hubo errores
+        
+        Raises:
+            NotImplementedError: Si no se implementa en la subclase
+        """
+        raise NotImplementedError(
+            f"El bot {self.bot_id} debe implementar el método run()"
+        )
+    
     
     async def upload_result(self, pdf_path: Path) -> bool:
         """
