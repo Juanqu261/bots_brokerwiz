@@ -160,15 +160,12 @@ class TestDriverManagerScreenshots:
     async def test_screenshot_creates_file(self):
         """screenshot debe guardar captura con nombre correcto."""
         with TemporaryDirectory() as tmpdir:
-            dm = SeleniumDriverManager("hdi", "job-123")
-            dm.SCREENSHOTS_DIR = Path(tmpdir)
+            dm = SeleniumDriverManager("hdi", "job-123", screenshots_dir=Path(tmpdir))
             dm.driver = MagicMock()
             
             result = await dm.screenshot("test_capture")
             
             assert result.parent == Path(tmpdir)
-            assert "hdi" in result.name
-            assert "job-123" in result.name
             assert "test_capture" in result.name
             assert result.suffix == ".png"
             dm.driver.save_screenshot.assert_called_once()
@@ -244,4 +241,15 @@ class TestDriverManagerConstants:
     def test_has_directory_constants(self):
         """Debe tener directorios configurados."""
         assert SeleniumDriverManager.TEMP_PDF_DIR is not None
-        assert SeleniumDriverManager.SCREENSHOTS_DIR is not None
+        assert SeleniumDriverManager.DEFAULT_SCREENSHOTS_DIR is not None
+
+    def test_custom_screenshots_dir(self):
+        """Debe aceptar directorio de screenshots personalizado."""
+        custom_dir = Path("/custom/screenshots")
+        dm = SeleniumDriverManager("hdi", "job-123", screenshots_dir=custom_dir)
+        assert dm._screenshots_dir == custom_dir
+
+    def test_default_screenshots_dir(self):
+        """Debe usar directorio default si no se especifica."""
+        dm = SeleniumDriverManager("hdi", "job-123")
+        assert dm._screenshots_dir == SeleniumDriverManager.DEFAULT_SCREENSHOTS_DIR

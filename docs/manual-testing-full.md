@@ -117,7 +117,7 @@ $headers = @{
 }
 
 # Enviar 4 tareas rápidamente
-1..4 | ForEach-Object {
+1..2 | ForEach-Object {
     $body = @{
         in_strIDSolicitudAseguradora = "test-parallel-$_"
         in_strPlaca = "PAR$_"
@@ -129,7 +129,7 @@ $headers = @{
         -Headers $headers `
         -Body $body
     
-    Write-Host "Enviada tarea $_ de 4"
+    Write-Host "Enviada tarea $_ de 2"
 }
 ```
 

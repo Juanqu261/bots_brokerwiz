@@ -19,12 +19,18 @@ Uso:
                 # Usar self.api para comunicación con BrokerWiz
                 await self.api.report_error(...)
                 return True
+
+Estructura de logs por ejecución:
+    logs/bots/{aseguradora}/{job_id}/
+    ├── bot.log          ← Logs específicos de esta ejecución
+    └── screenshots/     ← Screenshots de esta ejecución
 """
 
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from workers.bots.bot_logger import BotExecutionLogger
 from workers.selenium import SeleniumDriverManager
 from workers.http import AppWebClient
 
@@ -61,10 +67,17 @@ class BaseBot:
         self.job_id = job_id
         self.payload = payload
         
+        # Logger específico para esta ejecución (escribe a logs/bots/{bot_id}/{job_id}/)
+        self._bot_logger = BotExecutionLogger(bot_id, job_id)
+        self.logger = self._bot_logger.get_logger()
+        
         # Componentes expuestos - el bot los usa directamente
-        self.selenium = SeleniumDriverManager(bot_id, job_id)
+        self.selenium = SeleniumDriverManager(
+            bot_id, 
+            job_id,
+            screenshots_dir=self._bot_logger.screenshots_dir
+        )
         self.api = AppWebClient()
-        self.logger = logging.getLogger(f"bot.{self.bot_id}")
         
         # Estado interno
         self._setup_done = False
@@ -94,6 +107,8 @@ class BaseBot:
         await self.selenium.quit()
         self._setup_done = False
         self.logger.info(f"Bot {self.bot_id} finalizado para job {self.job_id}")
+        # Limpiar handler del logger específico
+        self._bot_logger.cleanup()
     
     async def run(self) -> bool:
         """
@@ -158,13 +173,18 @@ class BaseBot:
             except Exception as e:
                 self.logger.debug(f"No se pudo tomar screenshot: {e}")
         
-        await self.api.report_error(
-            solicitud_aseguradora_id=self.solicitud_id,
-            aseguradora=self.bot_id.upper(),
-            error_code=error_code,
-            message=message,
-            severity=severity
-        )
+        # Solo reportar a API en producción
+        from config.settings import settings
+        if settings.general.ENVIRONMENT == "production":
+            await self.api.report_error(
+                solicitud_aseguradora_id=self.solicitud_id,
+                aseguradora=self.bot_id.upper(),
+                error_code=error_code,
+                message=message,
+                severity=severity
+            )
+        else:
+            self.logger.debug(f"[DEV] Reporte a API omitido (ENVIRONMENT={settings.general.ENVIRONMENT})")
         
         self.logger.error(f"[{error_code}] {message}")
     

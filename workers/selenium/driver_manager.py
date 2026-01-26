@@ -58,22 +58,24 @@ class SeleniumDriverManager(SeleniumHelpers):
     
     # Directorios
     TEMP_PDF_DIR = Path("temp/pdfs")
-    SCREENSHOTS_DIR = Path("logs/bots/screenshots")
+    DEFAULT_SCREENSHOTS_DIR = Path("logs/bots/screenshots")
     PDF_RETENTION_HOURS = 1
     
-    def __init__(self, bot_id: str, job_id: str):
+    def __init__(self, bot_id: str, job_id: str, screenshots_dir: Path | None = None):
         """
         Inicializar manager del driver.
         
         Args:
             bot_id: Identificador del bot (ej: "hdi", "sura")
             job_id: ID único del job/tarea
+            screenshots_dir: Directorio para screenshots (opcional, usa default si no se pasa)
         """
         self.bot_id = bot_id
         self.job_id = job_id
         self.driver: Optional[webdriver.Chrome] = None
         self._cookies_manager = CookiesManager(bot_id)
         self._created_at: Optional[float] = None
+        self._screenshots_dir = screenshots_dir or self.DEFAULT_SCREENSHOTS_DIR
     
     # === Lifecycle ===
     
@@ -210,11 +212,11 @@ class SeleniumDriverManager(SeleniumHelpers):
     
     async def screenshot(self, name: str = "capture") -> Path:
         """Capturar pantalla."""
-        self.SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        self._screenshots_dir.mkdir(parents=True, exist_ok=True)
         
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"{self.bot_id}_{self.job_id}_{name}_{timestamp}.png"
-        path = self.SCREENSHOTS_DIR / filename
+        timestamp = time.strftime("%H%M%S")
+        filename = f"{timestamp}_{name}.png"
+        path = self._screenshots_dir / filename
         
         await asyncio.to_thread(self.driver.save_screenshot, str(path))
         logger.debug(f"[{self.bot_id}] Screenshot: {path}")

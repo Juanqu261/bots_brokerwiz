@@ -35,7 +35,7 @@ class ResourceManager:
     
     # Valores por defecto
     DEFAULT_MAX_CPU = 75.0  # Porcentaje máximo de CPU
-    DEFAULT_MAX_MEMORY = 80.0  # Porcentaje máximo de RAM
+    DEFAULT_MAX_MEMORY = 85.0  # Porcentaje máximo de RAM
     
     def __init__(
         self,

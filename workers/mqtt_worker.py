@@ -16,6 +16,7 @@ import argparse
 import signal
 from typing import Optional, Type
 
+from config.settings import settings
 from config.logging_config import setup_logging
 from mosquitto.mqtt_service import configure_event_loop, MQTTService
 from workers.resource_manager import ResourceManager, ResourceUnavailableError
@@ -103,12 +104,14 @@ async def handle_task(
                     
             except Exception as e:
                 logger.error(f"[{aseguradora.upper()}] Error en job {job_id}: {e}")
-                # Reportar error a la API
-                await bot.report_error(
-                    error_code="BOT_EXCEPTION",
-                    message=str(e),
-                    severity="CRITICAL"
-                )
+
+                # Reportar error a la API solo en produccion
+                if settings.ENVIRONMENT == "production":
+                    await bot.report_error(
+                        error_code="BOT_EXCEPTION",
+                        message=str(e),
+                        severity="CRITICAL"
+                    )
                 
     except ResourceUnavailableError as e:
         logger.warning(
@@ -153,6 +156,7 @@ async def run_worker(
     )
     
     reconnect_interval = 5.0
+    active_tasks: set[asyncio.Task] = set()
     
     while True:
         try:
@@ -167,20 +171,34 @@ async def run_worker(
                 
                 logger.info("Worker listo. Esperando tareas...")
                 
-                # Procesar mensajes
+                # Procesar mensajes en paralelo
                 async for msg_topic, data in mqtt.messages():
-                    try:
-                        await handle_task(msg_topic, data, resource_manager)
-                    except ResourceUnavailableError:
-                        # No loguear de nuevo, ya se logueó en handle_task
-                        # El mensaje se reintentará al reconectar
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error inesperado procesando tarea: {e}")
-                        # Continúa con el siguiente mensaje
+                    # Limpiar tareas completadas
+                    done_tasks = {t for t in active_tasks if t.done()}
+                    active_tasks -= done_tasks
+                    
+                    # Crear tarea asíncrona
+                    task = asyncio.create_task(
+                        handle_task(msg_topic, data, resource_manager)
+                    )
+                    active_tasks.add(task)
+                    
+                    # Callback para manejar excepciones sin bloquear
+                    def task_done_callback(t: asyncio.Task):
+                        try:
+                            exc = t.exception()
+                            if exc and not isinstance(exc, ResourceUnavailableError):
+                                logger.error(f"Error inesperado en tarea: {exc}")
+                        except asyncio.CancelledError:
+                            pass
+                    
+                    task.add_done_callback(task_done_callback)
                 
         except asyncio.CancelledError:
-            logger.info("Worker cancelado. Cerrando...")
+            logger.info("Worker cancelado. Esperando tareas activas...")
+            # Esperar que terminen las tareas en curso
+            if active_tasks:
+                await asyncio.gather(*active_tasks, return_exceptions=True)
             break
             
         except Exception as e:
