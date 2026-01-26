@@ -21,7 +21,6 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
 
 from config.settings import settings
 from workers.selenium.cookies_manager import CookiesManager
@@ -116,8 +115,7 @@ class SeleniumDriverManager(SeleniumHelpers):
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
         
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
+        driver = webdriver.Chrome(options=options)
         
         driver.implicitly_wait(self.IMPLICIT_TIMEOUT)
         driver.set_page_load_timeout(self.PAGE_LOAD_TIMEOUT)
