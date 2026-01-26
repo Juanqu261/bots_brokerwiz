@@ -80,6 +80,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.security.CORS_ORIGINS_LIST,
+    allow_origin_regex=r"^http://localhost(:\d+)?$",  # Permite localhost con cualquier puerto
     allow_credentials=settings.security.CORS_ALLOW_CREDENTIALS,
     allow_methods=settings.security.CORS_ALLOW_METHODS_LIST,
     allow_headers=["*"] if settings.security.CORS_ALLOW_HEADERS == "*" else settings.security.CORS_ALLOW_HEADERS.split(","),
