@@ -19,6 +19,8 @@ from selenium.common.exceptions import (
     StaleElementReferenceException,
 )
 
+from workers.selenium.human_interaction import HumanInteraction
+
 if TYPE_CHECKING:
     from selenium.webdriver.remote.webdriver import WebDriver
     from selenium.webdriver.remote.webelement import WebElement
@@ -36,6 +38,9 @@ class SeleniumHelpers:
     Diseñada para ser heredada. Requiere que la clase hija defina:
         - self.driver: WebDriver
         - self.TEMP_PDF_DIR: Path (para wait_for_download)
+    
+    Proporciona acceso a:
+        - self.human: HumanInteraction para simular comportamiento humano
     """
     
     # Constantes (pueden ser sobreescritas por la clase hija)
@@ -44,6 +49,25 @@ class SeleniumHelpers:
     
     # Referencia al driver (definida por la clase hija)
     driver: Optional["WebDriver"] = None
+    _human: Optional[HumanInteraction] = None
+    
+    @property
+    def human(self) -> HumanInteraction:
+        """
+        Acceso a métodos de interacción humana.
+        
+        Uso:
+            await self.human.pause(1, 3)
+            await self.human.click("#button")
+            await self.human.input("#input", "texto")
+        """
+        if not self.driver:
+            raise RuntimeError("Driver no inicializado")
+        
+        if self._human is None:
+            self._human = HumanInteraction(self.driver)
+        
+        return self._human
     
     # === Espera de elementos ===
     
@@ -209,6 +233,9 @@ class SeleniumHelpers:
         """
         Esperar a que se complete una descarga.
         
+        Verifica que el archivo exista, no esté en descarga (.crdownload),
+        y que su tamaño sea estable (no cambie entre lecturas).
+        
         Args:
             timeout: Tiempo máximo de espera
             extension: Extensión del archivo esperado
@@ -228,8 +255,15 @@ class SeleniumHelpers:
             
             if len(complete_files) > initial_count and len(temp_files) == 0:
                 newest = max(complete_files, key=lambda f: f.stat().st_mtime)
-                logger.debug(f"Descarga completada: {newest.name}")
-                return newest
+                
+                # Verificar que el tamaño sea estable (no está siendo escrito)
+                size1 = newest.stat().st_size
+                await asyncio.sleep(1)
+                size2 = newest.stat().st_size
+                
+                if size1 == size2 and size1 > 0:
+                    logger.debug(f"Descarga completada: {newest.name} ({size1} bytes)")
+                    return newest
             
             await asyncio.sleep(0.5)
         

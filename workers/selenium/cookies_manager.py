@@ -3,10 +3,12 @@ Guarda solo las cookies (no caché, historial ni extensiones) para mantener
 sesiones activas entre ejecuciones de bots.
 
 Estructura:
-    profiles/
-    ├── hdi/cookies.json
-    ├── sura/cookies.json
-    └── ...
+    temp/
+    ├── profiles/
+    │   ├── hdi/cookies.json
+    │   ├── sbs/cookies.json
+    │   └── ...
+    └── pdfs/
 """
 
 import json
@@ -24,15 +26,16 @@ logger = logging.getLogger(__name__)
 class CookiesManager:
     """Gestiona cookies de sesión en archivos JSON livianos."""
     
-    # Directorio base para perfiles
-    PROFILES_DIR = Path("profiles")
+    # Directorio base para perfiles (dentro de temp/)
+    PROFILES_DIR = Path("temp/profiles")
     
     def __init__(self, bot_id: str):
         """
         Inicializar manager de cookies.
         
         Args:
-            bot_id: Identificador del bot (ej: "hdi", "sura")
+            bot_id: Identificador del bot (ej: "hdi", "sbs")
+                   Todos los jobs del mismo bot comparten el mismo perfil/cookies
         """
         self.bot_id = bot_id
         self.cookies_file = self.PROFILES_DIR / bot_id / "cookies.json"

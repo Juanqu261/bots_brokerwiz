@@ -13,7 +13,7 @@ Uso:
 """
 
 from selenium.webdriver.common.by import By
-
+from asyncio import sleep
 from workers.bots import BaseBot
 
 
@@ -29,11 +29,11 @@ class HDIBot(BaseBot):
     """
     
     # URLs del portal HDI
-    URL_LOGIN = "https://example-hdi.com/login"
-    URL_COTIZADOR = "https://example-hdi.com/cotizador"
+    URL_LOGIN = "https://www.hdiseguros.com.co/"
+    URL_COTIZADOR = "https://tuseguro.hdiseguros.com.co/seguro-todo-riesgo-carro"
     
     # Dominio para cookies
-    COOKIE_DOMAIN = "example-hdi.com"
+    COOKIE_DOMAIN = "hdiseguros.com.co"
     
     def __init__(self, job_id: str, payload: dict):
         """
@@ -102,6 +102,7 @@ class HDIBot(BaseBot):
         
         # Navegar al dominio primero (requerido para cargar cookies)
         await self.selenium.get(self.URL_LOGIN)
+        await sleep(8)
         
         # Cargar cookies si existen
         cookies_loaded = await self.selenium.load_cookies(self.COOKIE_DOMAIN)

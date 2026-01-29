@@ -26,13 +26,12 @@ Estructura de logs por ejecución:
     └── screenshots/     ← Screenshots de esta ejecución
 """
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from workers.bots.bot_logger import BotExecutionLogger
-from workers.selenium import SeleniumDriverManager
 from workers.http import AppWebClient
+from workers.selenium import SeleniumDriverManager
+from workers.bots.bot_logger import BotExecutionLogger
 
 if TYPE_CHECKING:
     from selenium.webdriver.remote.webdriver import WebDriver
@@ -132,24 +131,58 @@ class BaseBot:
         """
         Subir PDF resultante a la API.
         
+        Renombra el PDF con formato: Autos - Cotizacion SBS [placa] - plan.pdf
+        Elimina el archivo después de enviarlo.
+        
         Args:
             pdf_path: Ruta al archivo PDF
         
         Returns:
             True si se subió exitosamente
         """
-        result = await self.api.upload_pdf(
-            pdf_path=pdf_path,
-            solicitud_aseguradora_id=self.solicitud_id,
-            tipo_subida="bot"
-        )
+        try:
+            # Renombrar PDF con formato estándar
+            placa = self.payload.get("in_strPlaca", "UNKNOWN").upper()
+            plan = self.payload.get("in_strPlan", "ESTANDAR")
+            
+            # Si plan es lista, tomar el primer elemento
+            if isinstance(plan, list):
+                plan = plan[0] if plan else "ESTANDAR"
+            
+            nuevo_nombre = f"Autos - Cotizacion SBS [{placa}] - {plan}.pdf"
+            pdf_renombrado = pdf_path.parent / nuevo_nombre
+            
+            if pdf_path.exists():
+                pdf_path.rename(pdf_renombrado)
+                self.logger.info(f"PDF renombrado: {pdf_path.name} → {nuevo_nombre}")
+                pdf_path = pdf_renombrado
+            
+            # Subir PDF
+            result = await self.api.upload_pdf(
+                pdf_path=pdf_path,
+                solicitud_aseguradora_id=self.solicitud_id,
+                tipo_subida="bot"
+            )
+            
+            if result.success:
+                self.logger.info(f"PDF subido exitosamente: {result.data.get('id', 'N/A')}")
+            else:
+                self.logger.error(f"Error subiendo PDF: {result.message}")
+            
+            return result.success
+            
+        except Exception as e:
+            self.logger.error(f"Error en upload_result: {e}")
+            return False
         
-        if result.success:
-            self.logger.info(f"PDF subido exitosamente: {result.data.get('id', 'N/A')}")
-        else:
-            self.logger.error(f"Error subiendo PDF: {result.message}")
-        
-        return result.success
+        finally:
+            # Limpiar archivo PDF después de enviarlo
+            try:
+                if pdf_path.exists():
+                    pdf_path.unlink()
+                    self.logger.debug(f"PDF eliminado: {pdf_path.name}")
+            except Exception as e:
+                self.logger.warning(f"No se pudo eliminar PDF: {e}")
     
     async def report_error(
         self,
