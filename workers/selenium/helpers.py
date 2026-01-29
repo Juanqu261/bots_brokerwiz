@@ -268,3 +268,79 @@ class SeleniumHelpers:
     async def execute_js(self, script: str, *args) -> any:
         """Ejecutar JavaScript en el navegador."""
         return await asyncio.to_thread(self.driver.execute_script, script, *args)
+    
+    # === Ventanas y handles ===
+    
+    async def get_current_window(self) -> str:
+        """Obtener handle de la ventana actual."""
+        return await asyncio.to_thread(lambda: self.driver.current_window_handle)
+    
+    async def get_window_handles(self) -> list[str]:
+        """Obtener lista de handles de todas las ventanas."""
+        return await asyncio.to_thread(lambda: self.driver.window_handles)
+    
+    async def switch_to_window(self, window_handle: str) -> None:
+        """Cambiar a una ventana específica."""
+        await asyncio.to_thread(self.driver.switch_to.window, window_handle)
+    
+    # === Screenshots ===
+    
+    async def take_screenshot(self, element: Optional["WebElement"] = None) -> bytes:
+        """
+        Tomar screenshot de la página o de un elemento.
+        
+        Args:
+            element: Elemento específico (opcional). Si no se proporciona, toma de toda la página.
+        
+        Returns:
+            Bytes de la imagen PNG
+        """
+        if element:
+            return await asyncio.to_thread(element.screenshot_as_png)
+        else:
+            return await asyncio.to_thread(self.driver.get_screenshot_as_png)
+    
+    # === Cookies ===
+    
+    async def save_cookies(self) -> None:
+        """
+        Guardar cookies de la sesión actual.
+        
+        Requiere que la clase hija tenga un atributo _cookies_manager.
+        """
+        if hasattr(self, '_cookies_manager'):
+            await self._cookies_manager.save(self.driver)
+        else:
+            logger.warning("No hay _cookies_manager disponible para guardar cookies")
+    
+    async def load_cookies(self, domain: str) -> bool:
+        """
+        Cargar cookies guardadas para un dominio.
+        
+        IMPORTANTE: El driver debe haber navegado primero al dominio
+        antes de cargar cookies (requisito de Selenium).
+        
+        Args:
+            domain: Dominio base para filtrar cookies (ej: "sbseguros.co")
+        
+        Returns:
+            True si se cargaron cookies, False si no existían o hubo error
+        """
+        if hasattr(self, '_cookies_manager'):
+            return await self._cookies_manager.load(self.driver, domain)
+        else:
+            logger.warning("No hay _cookies_manager disponible para cargar cookies")
+            return False
+    
+    # === Acceso directo al driver ===
+    
+    def get_raw_driver(self) -> "WebDriver":
+        """
+        Obtener acceso al driver crudo para operaciones no cubiertas.
+        
+        Útil para extensiones personalizadas que necesitan acceso directo a Selenium.
+        
+        Returns:
+            WebDriver instancia sin wrapper
+        """
+        return self.driver

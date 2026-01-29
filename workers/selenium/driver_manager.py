@@ -48,6 +48,8 @@ class SeleniumDriverManager(SeleniumHelpers):
         "--disable-notifications",
         "--disable-popup-blocking",
         "--window-size=1920,1080",
+        "--start-maximized",
+        # "--incognito",
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     ]
     
@@ -106,6 +108,8 @@ class SeleniumDriverManager(SeleniumHelpers):
             options.add_argument(arg)
         
         prefs = {
+            "credentials_enable_service": False,
+            "profile.password_manager_enabled": False,
             "download.default_directory": str(self.TEMP_PDF_DIR.absolute()),
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
