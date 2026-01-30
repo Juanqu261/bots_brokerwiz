@@ -1,0 +1,15 @@
+# BrokerWiz Health Monitor Cron Configuration
+#
+# Runs health checks every 5 minutes
+#
+# Installation:
+#   sudo cp scripts/cron.d/brokerwiz-health /etc/cron.d/brokerwiz-health
+#   sudo chmod 644 /etc/cron.d/brokerwiz-health
+#   sudo systemctl restart cron
+#
+# Or add to user crontab:
+#   crontab -e
+#   */5 * * * * /opt/brokerwiz/scripts/health_monitor.sh
+
+# Run every 5 minutes
+*/5 * * * * brokerwiz /opt/brokerwiz/scripts/health_monitor.sh >> /opt/brokerwiz/logs/health_monitor.log 2>&1
