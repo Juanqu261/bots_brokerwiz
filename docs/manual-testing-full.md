@@ -38,7 +38,6 @@ mosquitto -p 1883 -v
 ### Paso 1.2: Levantar la API (Terminal 2)
 
 ```powershell
-cd C:\Users\juanf\Desktop\bots_brokerWiz
 python -m app.main
 ```
 
@@ -55,7 +54,6 @@ Invoke-RestMethod http://localhost:8000/health
 ### Paso 1.4: Iniciar Worker (Terminal 3)
 
 ```powershell
-cd C:\Users\juanf\Desktop\bots_brokerWiz
 python -m workers.mqtt_worker --id worker-1
 ```
 
@@ -104,7 +102,6 @@ Invoke-RestMethod -Method POST `
 ### Paso 2.1: Iniciar Worker adicional (Terminal 5)
 
 ```powershell
-cd C:\Users\juanf\Desktop\bots_brokerWiz
 python -m workers.mqtt_worker --id worker-2
 ```
 
@@ -147,7 +144,6 @@ Observa los logs de **worker-1** y **worker-2**:
 ### Paso 3.1: Iniciar worker dedicado a HDI
 
 ```powershell
-cd C:\Users\juanf\Desktop\bots_brokerWiz
 python -m workers.mqtt_worker --id worker-hdi-only --aseguradora hdi
 ```
 
