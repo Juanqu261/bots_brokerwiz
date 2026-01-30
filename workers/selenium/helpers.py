@@ -228,7 +228,8 @@ class SeleniumHelpers:
     async def wait_for_download(
         self,
         timeout: int = 30,
-        extension: str = ".pdf"
+        extension: str = ".pdf",
+        initial_count: int = None
     ) -> Optional[Path]:
         """
         Esperar a que se complete una descarga.
@@ -239,35 +240,89 @@ class SeleniumHelpers:
         Args:
             timeout: Tiempo máximo de espera
             extension: Extensión del archivo esperado
+            initial_count: Número de archivos iniciales (si None, se cuenta al inicio)
         
         Returns:
             Path del archivo descargado, o None si timeout
         """
+        import time
+        
         self.TEMP_PDF_DIR.mkdir(parents=True, exist_ok=True)
         
-        initial_count = len(list(self.TEMP_PDF_DIR.glob(f"*{extension}")))
-        start = asyncio.get_event_loop().time()
+        # Contar archivos iniciales
+        if initial_count is None:
+            initial_files = list(self.TEMP_PDF_DIR.glob(f"*{extension}"))
+            initial_count = len(initial_files)
+        else:
+            initial_files = list(self.TEMP_PDF_DIR.glob(f"*{extension}"))
         
-        while (asyncio.get_event_loop().time() - start) < timeout:
-            files = list(self.TEMP_PDF_DIR.glob(f"*{extension}"))
-            temp_files = list(self.TEMP_PDF_DIR.glob("*.crdownload"))
-            complete_files = [f for f in files if f.suffix != ".crdownload"]
-            
-            if len(complete_files) > initial_count and len(temp_files) == 0:
-                newest = max(complete_files, key=lambda f: f.stat().st_mtime)
-                
-                # Verificar que el tamaño sea estable (no está siendo escrito)
-                size1 = newest.stat().st_size
-                await asyncio.sleep(1)
-                size2 = newest.stat().st_size
-                
-                if size1 == size2 and size1 > 0:
-                    logger.debug(f"Descarga completada: {newest.name} ({size1} bytes)")
-                    return newest
-            
-            await asyncio.sleep(0.5)
+        logger.info(f"Esperando descarga en {self.TEMP_PDF_DIR.absolute()}")
+        logger.info(f"Archivos iniciales: {initial_count}")
+        if initial_files:
+            logger.info(f"Archivos existentes: {[f.name for f in initial_files]}")
         
-        logger.warning("Timeout esperando descarga")
+        start_time = time.time()
+        last_log_time = start_time
+        
+        while (time.time() - start_time) < timeout:
+            try:
+                # Buscar archivos PDF
+                all_pdfs = list(self.TEMP_PDF_DIR.glob(f"*{extension}"))
+                
+                # Buscar archivos en descarga
+                temp_files = list(self.TEMP_PDF_DIR.glob("*.crdownload"))
+                
+                # Log cada 5 segundos para no saturar
+                current_time = time.time()
+                if (current_time - last_log_time) > 5:
+                    logger.debug(f"PDFs encontrados: {len(all_pdfs)}, en descarga: {len(temp_files)}")
+                    if all_pdfs:
+                        logger.debug(f"Archivos: {[f.name for f in all_pdfs]}")
+                    last_log_time = current_time
+                
+                # Si hay más archivos que al inicio y no hay archivos en descarga
+                if len(all_pdfs) > initial_count and len(temp_files) == 0:
+                    # Obtener el archivo más reciente
+                    newest = max(all_pdfs, key=lambda f: f.stat().st_mtime)
+                    
+                    logger.info(f"Archivo más reciente detectado: {newest.name}")
+                    
+                    # Verificar que el tamaño sea estable (no está siendo escrito)
+                    size1 = newest.stat().st_size
+                    await asyncio.sleep(1)
+                    size2 = newest.stat().st_size
+                    
+                    logger.debug(f"Validación de tamaño: {size1} → {size2} bytes")
+                    
+                    if size1 == size2 and size1 > 0:
+                        logger.info(f"Descarga completada: {newest.name} ({size1} bytes)")
+                        return newest
+                    else:
+                        logger.debug(f"Tamaño inestable, esperando más...")
+                
+                await asyncio.sleep(0.5)
+                
+            except Exception as e:
+                logger.warning(f"Error verificando descarga: {e}")
+                await asyncio.sleep(0.5)
+        
+        # Timeout
+        logger.error(f"Timeout esperando descarga después de {timeout}s")
+        logger.error(f"Directorio: {self.TEMP_PDF_DIR.absolute()}")
+        
+        # Listar todos los archivos en el directorio para debugging
+        try:
+            all_files = list(self.TEMP_PDF_DIR.glob("*"))
+            logger.error(f"Archivos en directorio: {[f.name for f in all_files]}")
+            
+            # Mostrar archivos por extensión
+            for ext in [".pdf", ".crdownload", ""]:
+                files = list(self.TEMP_PDF_DIR.glob(f"*{ext}"))
+                if files:
+                    logger.error(f"Archivos {ext}: {[f.name for f in files]}")
+        except Exception as e:
+            logger.error(f"Error listando archivos: {e}")
+        
         return None
     
     async def wait_for_url(self, text: str, timeout: int = DEFAULT_TIMEOUT) -> bool:

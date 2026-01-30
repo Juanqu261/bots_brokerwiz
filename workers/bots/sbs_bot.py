@@ -255,9 +255,9 @@ class SBSBot(BaseBot):
                 payload.get("in_strEmail", "")
             )
             
-            await self.selenium.human.click(SBSUIElements.BUTTON_RESPONSABILIDAD_CIVIL_NO)
+            await self._click_checkbox(SBSUIElements.BUTTON_RESPONSABILIDAD_CIVIL_NO)
             await self.selenium.human.pause(3, 5)
-            await self.selenium.human.click(SBSUIElements.BUTTON_BICICLETA_NO)
+            await self._click_checkbox(SBSUIElements.BUTTON_BICICLETA_NO)
             
             # === ESPERAR TABLA DE COTIZACIÓN ===
             ok = await self._esperar_tabla_cotizacion()
@@ -266,21 +266,31 @@ class SBSBot(BaseBot):
                 return False
             
             # === SELECCIONAR COBERTURAS ===
-            await self.selenium.human.click(SBSUIElements.BUTTON_GASTOS)
-            await self.selenium.human.click(SBSUIElements.BUTTON_LLANTAS_ESTALLADAS)
-            await self.selenium.human.click(SBSUIElements.BUTTON_PEQUEÑOS_ACCESORIOS)
-            await self.selenium.human.click(SBSUIElements.BUTTON_ACCIDENTES_PERSONALES)
-            await self.selenium.human.click(SBSUIElements.BUTTON_REMPLAZO_LLAVES)
+            await self._click_checkbox(SBSUIElements.BUTTON_GASTOS)
+            await self._click_checkbox(SBSUIElements.BUTTON_LLANTAS_ESTALLADAS)
+            await self._click_checkbox(SBSUIElements.BUTTON_PEQUEÑOS_ACCESORIOS)
+            await self._click_checkbox(SBSUIElements.BUTTON_ACCIDENTES_PERSONALES)
+            await self._click_checkbox(SBSUIElements.BUTTON_REMPLAZO_LLAVES)
             
             # === SELECCIONAR PLAN ===
             await self._seleccionar_plan(payload.get("in_strPlan", "ESTANDAR"))
             
             # === DESCARGAR PDF ===
             await self.selenium.human.click(SBSUIElements.BUTTON_COTIZAR2)
+            
+            # Contar PDFs ANTES de hacer click en descargar
+            # Esto es crítico: el PDF se descarga muy rápido
+            initial_pdf_count = len(list(self.selenium.TEMP_PDF_DIR.glob("*.pdf")))
+            self.logger.debug(f"PDFs antes de descargar: {initial_pdf_count}")
+            
             await self.selenium.human.click(SBSUIElements.BUTTON_DESCARGAR_PDF)
             
-            # Esperar PDF
-            pdf_path = await self.selenium.wait_for_download(timeout=90, extension=".pdf")
+            # Esperar PDF (pasando el conteo inicial)
+            pdf_path = await self.selenium.wait_for_download(
+                timeout=90, 
+                extension=".pdf",
+                initial_count=initial_pdf_count
+            )
             if not pdf_path:
                 await self.report_error("PDF_001", "No se pudo descargar el PDF")
                 return False

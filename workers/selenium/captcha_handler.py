@@ -133,7 +133,7 @@ class CaptchaHandler:
         self,
         api_key: str,
         task_id: int,
-        max_attempts: int = 20,
+        max_attempts: int = 10,
         retry_delay: int = 10,
         max_retries: int = 10,
         captcha_input_selector: str = None,
@@ -213,35 +213,64 @@ class CaptchaHandler:
                     if len(captcha_text) == 6:
                         # === VALIDACIÓN 2: Disponibilidad del botón ===
                         try:
+                            self.logger.debug(f"Intentando llenar captcha: '{captcha_text}'")
+                            
                             # Llenar campo de captcha
                             captcha_input = await self.selenium.wait_for(
                                 By.CSS_SELECTOR,
                                 captcha_input_selector,
-                                timeout=3
+                                timeout=5
                             )
-                            await self.selenium.type_text(captcha_input, captcha_text)
                             
-                            # Click en pantalla para confirmar
-                            body = await self.selenium.wait_for(
-                                By.CSS_SELECTOR,
-                                "body",
-                                timeout=1
-                            )
-                            await self.selenium.click(body)
+                            # Limpiar campo primero
+                            await self.selenium.type_text(captcha_input, captcha_text, clear=True)
+                            self.logger.debug(f"Captcha escrito en el campo")
+                            
+                            # Pequeña pausa para que se procese
+                            await asyncio.sleep(0.5)
+                            
+                            # Verificar que el texto se escribió correctamente
+                            written_value = await self.selenium.get_attribute(captcha_input, "value")
+                            self.logger.debug(f"Valor en campo: '{written_value}'")
+                            
+                            if written_value != captcha_text:
+                                self.logger.warning(
+                                    f"Captcha no se escribió correctamente. "
+                                    f"Esperado: '{captcha_text}', Obtenido: '{written_value}'"
+                                )
+                                # Reintento
+                                if retry_count >= max_retries:
+                                    self.logger.error(f"Se alcanzó el máximo de reintentos ({max_retries})")
+                                    return None
+                                
+                                retry_count += 1
+                                self.logger.info(f"Reintento {retry_count}/{max_retries} - Regenerando captcha...")
+                                
+                                current_task_id = await self._regenerate_captcha(
+                                    api_key,
+                                    refresh_button_selector,
+                                    captcha_image_selector
+                                )
+                                if not current_task_id:
+                                    return None
+                                
+                                intento = 0
+                                continue
                             
                             # Verificar que el botón de login sea clickable
+                            self.logger.debug(f"Verificando disponibilidad del botón de login...")
                             login_btn = await self.selenium.wait_for(
                                 By.CSS_SELECTOR,
                                 login_button_selector,
                                 condition="clickable",
-                                timeout=3
+                                timeout=5
                             )
                             
-                            self.logger.info(f"Captcha validado y botón disponible: {captcha_text}")
+                            self.logger.info(f"✅ Captcha validado y botón disponible: {captcha_text}")
                             return captcha_text
                             
                         except Exception as e:
-                            self.logger.warning(f"Botón de login no disponible: {e}")
+                            self.logger.warning(f"Error en validación de captcha: {e}")
                             
                             if retry_count >= max_retries:
                                 self.logger.error(f"Se alcanzó el máximo de reintentos ({max_retries})")
