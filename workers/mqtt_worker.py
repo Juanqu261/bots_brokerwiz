@@ -23,6 +23,10 @@ from workers.resource_manager import ResourceManager, ResourceUnavailableError
 from workers.bots import BaseBot
 from workers.bots.hdi_bot import HDIBot
 from workers.bots.sbs_bot import SBSBot
+from workers.models import JobMessage, ErrorDetail
+from workers.error_classifier import ErrorClassifier
+from workers.retry_manager import RetryManager, RetryAction
+from workers.errors import BotNotImplementedError, PermanentError
 
 # Configurar logging al inicio
 logger = setup_logging("worker")
@@ -64,22 +68,29 @@ def list_available_bots() -> list[str]:
 async def handle_task(
     topic: str,
     data: dict,
-    resource_manager: ResourceManager
+    resource_manager: ResourceManager,
+    mqtt_client: MQTTService
 ) -> None:
     """
-    Procesar tarea recibida de MQTT.
+    Procesar tarea recibida de MQTT con retry logic integrado.
     
     Args:
         topic: Topic MQTT (ej: "bots/queue/hdi")
-        data: Datos del mensaje {"job_id", "payload", "timestamp"}
+        data: Datos del mensaje {"job_id", "payload", "timestamp", ...}
         resource_manager: Gestor de recursos para control de concurrencia
+        mqtt_client: Cliente MQTT para requeue y DLQ
     """
     # Extraer aseguradora del topic
     aseguradora = topic.split("/")[-1]
-    job_id = data.get("job_id", "unknown")
-    payload = data.get("payload", {})
     
-    logger.info(f"[{aseguradora.upper()}] Recibido job: {job_id}")
+    # Convertir a JobMessage (con backward compatibility)
+    message = JobMessage.from_dict(data)
+    job_id = message.job_id
+    
+    logger.info(
+        f"[{aseguradora.upper()}] Recibido job: {job_id} "
+        f"(retry {message.retry_count}/{message.max_retries})"
+    )
     
     # Verificar que existe bot para esta aseguradora
     bot_class = get_bot_class(aseguradora)
@@ -88,12 +99,29 @@ async def handle_task(
             f"[{aseguradora.upper()}] Bot no implementado. "
             f"Disponibles: {list_available_bots() or 'ninguno'}"
         )
+        # Bot no implementado es error permanente → DLQ
+        error = BotNotImplementedError(f"Bot for {aseguradora} not implemented")
+        retry_manager = RetryManager(mqtt_client)
+        error_detail = retry_manager.create_error_detail(
+            error,
+            retry_manager.error_classifier.classify(error),
+            retry_manager.error_classifier.get_error_code(error)
+        )
+        message.add_error(error_detail)
+        await retry_manager.send_to_dlq(message, aseguradora)
         return
+    
+    # Crear retry manager
+    retry_manager = RetryManager(mqtt_client, max_retries=message.max_retries)
     
     # Adquirir slot de recursos y ejecutar bot
     try:
         async with resource_manager.acquire_slot(aseguradora, job_id):
-            bot = bot_class(job_id=job_id, payload=payload)
+            bot = bot_class(job_id=job_id, payload=message.payload)
+            
+            # Intentar ejecutar bot
+            success = False
+            exception = None
             
             try:
                 async with bot:
@@ -101,19 +129,25 @@ async def handle_task(
                     
                 if success:
                     logger.info(f"[{aseguradora.upper()}] Job {job_id} completado exitosamente")
+                    return
                 else:
+                    # Bot retornó False (error sin excepción)
                     logger.warning(f"[{aseguradora.upper()}] Job {job_id} completado con errores")
+                    exception = Exception("Bot execution returned False")
                     
             except Exception as e:
                 logger.error(f"[{aseguradora.upper()}] Error en job {job_id}: {e}")
-
-                # Reportar error a la API solo en produccion
-                if settings.ENVIRONMENT == "production":
-                    await bot.report_error(
-                        error_code="BOT_EXCEPTION",
-                        message=str(e),
-                        severity="CRITICAL"
-                    )
+                exception = e
+            
+            # Si llegamos aquí, hubo un error
+            if exception:
+                await handle_bot_failure(
+                    message=message,
+                    exception=exception,
+                    aseguradora=aseguradora,
+                    bot=bot,
+                    retry_manager=retry_manager
+                )
                 
     except ResourceUnavailableError as e:
         logger.warning(
@@ -122,6 +156,113 @@ async def handle_task(
         )
         # Al no hacer ACK, el mensaje se reintentará
         raise
+
+
+async def handle_bot_failure(
+    message: JobMessage,
+    exception: Exception,
+    aseguradora: str,
+    bot: BaseBot,
+    retry_manager: RetryManager
+) -> None:
+    """
+    Manejar fallo de bot con lógica de retry multi-tier.
+    
+    Args:
+        message: Mensaje del job
+        exception: Excepción que ocurrió
+        aseguradora: Identificador de aseguradora
+        bot: Instancia del bot (para reportar errores)
+        retry_manager: Gestor de retry
+    """
+    job_id = message.job_id
+    
+    # Clasificar error
+    error_type = retry_manager.error_classifier.classify(exception)
+    error_code = retry_manager.error_classifier.get_error_code(exception)
+    
+    # Crear detalle del error
+    error_detail = retry_manager.create_error_detail(
+        exception,
+        error_type,
+        error_code,
+        include_stack_trace=settings.general.DEBUG
+    )
+    
+    # Agregar error al historial
+    message.add_error(error_detail)
+    
+    # Tier 1: Immediate retry para errores transitorios
+    if error_type.value == "TRANSIENT":
+        logger.info(f"[{aseguradora.upper()}] Job {job_id} - Intentando retry inmediato...")
+        
+        try:
+            # Reintentar inmediatamente
+            async with bot:
+                success = await bot.run()
+                
+            if success:
+                logger.info(
+                    f"[{aseguradora.upper()}] Job {job_id} - "
+                    f"Retry inmediato exitoso"
+                )
+                return
+            else:
+                logger.warning(
+                    f"[{aseguradora.upper()}] Job {job_id} - "
+                    f"Retry inmediato falló"
+                )
+                # Reclasificar como retriable para delayed retry
+                exception = Exception("Immediate retry failed")
+                
+        except Exception as e2:
+            logger.warning(
+                f"[{aseguradora.upper()}] Job {job_id} - "
+                f"Retry inmediato falló: {e2}"
+            )
+            exception = e2
+            
+            # Reclasificar el nuevo error
+            error_type = retry_manager.error_classifier.classify(e2)
+            error_code = retry_manager.error_classifier.get_error_code(e2)
+            error_detail = retry_manager.create_error_detail(
+                e2, error_type, error_code, include_stack_trace=settings.general.DEBUG
+            )
+            message.add_error(error_detail)
+    
+    # Determinar acción de retry
+    action = retry_manager.handle_failure(
+        message,
+        exception,
+        already_retried_immediately=(error_type.value == "TRANSIENT")
+    )
+    
+    # Tier 2: Delayed retry con exponential backoff
+    if action == RetryAction.REQUEUE:
+        logger.info(
+            f"[{aseguradora.upper()}] Job {job_id} - "
+            f"Programando retry con delay"
+        )
+        await retry_manager.requeue_with_delay(message, aseguradora)
+        return
+    
+    # Tier 3: Dead Letter Queue
+    if action == RetryAction.DLQ:
+        logger.warning(
+            f"[{aseguradora.upper()}] Job {job_id} - "
+            f"Enviando a DLQ (tipo={error_type.value}, código={error_code})"
+        )
+        
+        # Reportar error a la API en producción
+        if settings.general.ENVIRONMENT == "production":
+            await bot.report_error(
+                error_code=error_code,
+                message=str(exception),
+                severity="CRITICAL"
+            )
+        
+        await retry_manager.send_to_dlq(message, aseguradora)
+        return
 
 
 # === Worker principal ===
@@ -179,9 +320,9 @@ async def run_worker(
                     done_tasks = {t for t in active_tasks if t.done()}
                     active_tasks -= done_tasks
                     
-                    # Crear tarea asíncrona
+                    # Crear tarea asíncrona (pasar mqtt client para retry)
                     task = asyncio.create_task(
-                        handle_task(msg_topic, data, resource_manager)
+                        handle_task(msg_topic, data, resource_manager, mqtt)
                     )
                     active_tasks.add(task)
                     
