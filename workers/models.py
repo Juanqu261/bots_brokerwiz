@@ -105,7 +105,8 @@ class JobMessage:
         Create from dictionary (MQTT message).
         
         Handles backward compatibility by initializing missing retry metadata
-        with default values.
+        with default values. Also handles legacy message format where extra
+        fields are at the root level instead of inside payload.
         
         Args:
             data: Dictionary from MQTT message
@@ -113,28 +114,46 @@ class JobMessage:
         Returns:
             JobMessage instance
         """
+        # Extract known JobMessage fields
+        job_id = data.get("job_id", "unknown")
+        payload = data.get("payload", {})
+        
         # Backward compatibility: initialize missing retry metadata
-        if "retry_count" not in data:
-            data["retry_count"] = 0
-        if "max_retries" not in data:
-            data["max_retries"] = 3
-        if "first_attempt_at" not in data:
-            data["first_attempt_at"] = datetime.utcnow().isoformat() + "Z"
-        if "last_error" not in data:
-            data["last_error"] = None
-        if "error_history" not in data:
-            data["error_history"] = []
+        retry_count = data.get("retry_count", 0)
+        max_retries = data.get("max_retries", 3)
+        first_attempt_at = data.get("first_attempt_at", datetime.utcnow().isoformat() + "Z")
+        last_error = data.get("last_error")
+        error_history = data.get("error_history", [])
+        
+        # Handle legacy format: extra fields at root level should go into payload
+        # This includes fields like in_strIDSolicitudAseguradora, in_strPlaca, etc.
+        known_fields = {
+            "job_id", "payload", "retry_count", "max_retries", 
+            "first_attempt_at", "last_error", "error_history", "timestamp"
+        }
+        
+        for key, value in data.items():
+            if key not in known_fields and key not in payload:
+                payload[key] = value
         
         # Convert error dicts to ErrorDetail objects
-        if data["last_error"] is not None:
-            data["last_error"] = ErrorDetail.from_dict(data["last_error"])
+        if last_error is not None:
+            last_error = ErrorDetail.from_dict(last_error)
         
-        data["error_history"] = [
+        error_history = [
             ErrorDetail.from_dict(e) if isinstance(e, dict) else e
-            for e in data["error_history"]
+            for e in error_history
         ]
         
-        return cls(**data)
+        return cls(
+            job_id=job_id,
+            payload=payload,
+            retry_count=retry_count,
+            max_retries=max_retries,
+            first_attempt_at=first_attempt_at,
+            last_error=last_error,
+            error_history=error_history
+        )
     
     @classmethod
     def from_json(cls, json_str: str) -> "JobMessage":
