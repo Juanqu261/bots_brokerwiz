@@ -37,7 +37,7 @@ BOT_PAYLOADS = {
         "in_strCodigoFasecolda": "string",
         "in_strModelo": "string",
         "in_strPlan": [
-            "string"
+            "BASICO"
         ]
     },
     "hdi": {
