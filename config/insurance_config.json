@@ -1,0 +1,42 @@
+{
+  "hdi": {
+    "enabled": true,
+    "description": "HDI Seguros"
+  },
+  "sura": {
+    "enabled": true,
+    "description": "SURA Seguros"
+  },
+  "axa": {
+    "enabled": true,
+    "description": "AXA Seguros"
+  },
+  "allianz": {
+    "enabled": true,
+    "description": "Allianz Seguros"
+  },
+  "bolivar": {
+    "enabled": true,
+    "description": "Seguros Bolívar"
+  },
+  "equidad": {
+    "enabled": true,
+    "description": "Equidad Seguros"
+  },
+  "mundial": {
+    "enabled": true,
+    "description": "Seguros Mundial"
+  },
+  "sbs": {
+    "enabled": true,
+    "description": "SBS Seguros"
+  },
+  "solidaria": {
+    "enabled": true,
+    "description": "La Solidaria Seguros"
+  },
+  "runt": {
+    "enabled": true,
+    "description": "RUNT - Registro Único Nacional de Tránsito"
+  }
+}
