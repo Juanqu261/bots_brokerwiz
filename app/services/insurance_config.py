@@ -1,8 +1,5 @@
 """
-Insurance configuration management.
-
-This module provides centralized configuration for insurance companies,
-allowing administrators to enable/disable specific insurances without code changes.
+Administracion de aseguradoras activas.
 """
 
 import json
@@ -17,14 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 class InsuranceConfig(BaseModel):
-    """Configuration for a single insurance company."""
+    """Configuracion general de una aseguradora."""
     enabled: bool = Field(
         default=True,
-        description="Whether this insurance company is currently enabled"
+        description="Definir si la aseguradora esta activa o no."
     )
     description: Optional[str] = Field(
         default=None,
-        description="Human-readable description of the insurance company"
+        description="Descripcion o nombre mas detallado."
     )
     
     model_config = {
@@ -39,18 +36,14 @@ class InsuranceConfig(BaseModel):
 
 class InsuranceConfigManager:
     """
-    Manages insurance company configurations.
-    
-    Loads configuration from a JSON file and provides methods to check
-    insurance status and retrieve configuration details.
+    Carga las configuraciones desde el json y ofrece metodos para su
+    lectura.
     """
     
     def __init__(self, config_path: str = "config/insurance_config.json"):
         """
-        Initialize the configuration manager.
-        
         Args:
-            config_path: Path to the configuration JSON file
+            config_path: Ruta al archivo de configuraciones.
         """
         self.config_path = Path(config_path)
         self._config: Dict[str, InsuranceConfig] = {}
@@ -58,14 +51,14 @@ class InsuranceConfigManager:
     
     def load_config(self) -> None:
         """
-        Load configuration from JSON file.
+        Cargar las configuracione
         
-        If the file doesn't exist, all insurances default to enabled.
+        Si el archivo no existe, todas las aseguradoras se marcan activas.
         """
         if not self.config_path.exists():
             logger.warning(
-                f"Configuration file not found at {self.config_path}. "
-                "Defaulting to all insurances enabled."
+                f"Archivo de configuracion no encontrado {self.config_path}. "
+                "Marcando todas las aseguradoras como activas."
             )
             self._load_default_config()
             return
@@ -78,49 +71,49 @@ class InsuranceConfigManager:
             for key, value in config_data.items():
                 self._config[key.lower()] = InsuranceConfig(**value)
             
-            logger.info(f"Loaded configuration for {len(self._config)} insurances")
+            logger.info(f"Configuracion cargas para {len(self._config)} aseguradoras.")
         
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse configuration file: {e}")
+            logger.error(f"Error al parsear archivo de configuracion: {e}")
             self._load_default_config()
         
         except Exception as e:
-            logger.error(f"Error loading configuration: {e}")
+            logger.error(f"Error cargando configuraciones: {e}")
             self._load_default_config()
     
     def _load_default_config(self) -> None:
-        """Load default configuration with all insurances enabled."""
+        """Cargar configuracion por defecto, con todas las aseguradoras activadas."""
         self._config = {
             aseg.value: InsuranceConfig(enabled=True, description=aseg.value.upper())
             for aseg in Aseguradora
         }
-        logger.info("Loaded default configuration (all insurances enabled)")
+        logger.info("Cargada configuracion por defecto (todas las aseguradoras activas).")
     
     def is_enabled(self, aseguradora: Aseguradora) -> bool:
         """
-        Check if an insurance company is enabled.
+        Chequea si una aseguradora esta activa.
         
         Args:
-            aseguradora: Insurance company enum
+            aseguradora: Aseguradora enum
             
         Returns:
-            True if enabled, False otherwise
+            True si esta activa, False de otra manera
         """
         config = self._config.get(aseguradora.value)
         if config is None:
             # If not in config, default to enabled
             logger.warning(
-                f"No configuration found for {aseguradora.value}, defaulting to enabled"
+                f"Configuracion no encontrada {aseguradora.value}, activa por defecto."
             )
             return True
         return config.enabled
     
     def get_config(self, aseguradora: Aseguradora) -> InsuranceConfig:
         """
-        Get configuration for an insurance company.
+        Extraer toda la configuracion de una aseguradora.
         
         Args:
-            aseguradora: Insurance company enum
+            aseguradora: Aseguradora enum
             
         Returns:
             Insurance configuration
@@ -133,11 +126,9 @@ class InsuranceConfigManager:
     
     def reload(self) -> None:
         """
-        Reload configuration from file.
-        
-        This allows updating configuration without restarting the application.
+        Recarga archivo de configuracion
         """
-        logger.info("Reloading insurance configuration")
+        logger.info("Recargando configuraciones de aseguradoras.")
         self.load_config()
 
 
@@ -147,9 +138,7 @@ _config_manager: Optional[InsuranceConfigManager] = None
 
 def get_insurance_config() -> InsuranceConfigManager:
     """
-    Dependency injection function for FastAPI.
-    
-    Returns a singleton instance of InsuranceConfigManager.
+    Devuelve instancia singleton.
     """
     global _config_manager
     if _config_manager is None:

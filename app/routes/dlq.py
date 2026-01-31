@@ -1,7 +1,5 @@
 """
-Dead Letter Queue (DLQ) management endpoints.
-
-Provides API for listing and retrying failed jobs.
+Dead Letter Queue (DLQ) endpoints.
 """
 
 import logging
@@ -16,15 +14,13 @@ router = APIRouter(tags=["DLQ"], prefix="/api/dlq")
 
 @router.get(
     "",
-    summary="List all DLQ messages",
-    description="Get all messages in the Dead Letter Queue across all aseguradoras."
+    summary="Lista todos los mensajes DLQ",
+    description="lista todos los mensajes de todas las aseguradoras bajo el topic dlq."
 )
 async def list_all_dlq_messages():
     """
-    List all DLQ messages.
-    
     Returns:
-        List of DLQ messages with full metadata
+        Lista con los mensajes DLQ
     """
     try:
         dlq_manager = get_dlq_manager()
@@ -35,29 +31,27 @@ async def list_all_dlq_messages():
         }
     
     except Exception as e:
-        logger.error(f"Error listing DLQ messages: {e}")
+        logger.error(f"Error extrayendo los mensajes DLQ: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error listing DLQ messages: {str(e)}"
+            detail=f"Error extrayendo los mensajes DLQ: {str(e)}"
         )
 
 
 @router.get(
     "/{aseguradora}",
-    summary="List DLQ messages by aseguradora",
-    description="Get DLQ messages filtered by insurance company."
+    summary="Lista los mensajes DLQ por aseguradora",
+    description="Mensajes DLQ filtrados por aseguradora"
 )
 async def list_dlq_by_aseguradora(
-    aseguradora: str = Path(..., description="Insurance company identifier (e.g., sbs, hdi)")
+    aseguradora: str = Path(..., description="Identificador de la aseguradora (e.g., sbs, hdi)")
 ):
     """
-    List DLQ messages for specific aseguradora.
-    
     Args:
-        aseguradora: Insurance company identifier
+        aseguradora: Identificador de la aseguradora
     
     Returns:
-        List of DLQ messages for the aseguradora
+        Lista de los mensajes DLQ de la aseguradora
     """
     try:
         dlq_manager = get_dlq_manager()
@@ -69,36 +63,34 @@ async def list_dlq_by_aseguradora(
         }
     
     except Exception as e:
-        logger.error(f"Error listing DLQ messages for {aseguradora}: {e}")
+        logger.error(f"Error extrayendo mensajes DLQ para {aseguradora}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error listing DLQ messages: {str(e)}"
+            detail=f"Error listando mensajes DLQ: {str(e)}"
         )
 
 
 @router.post(
     "/{job_id}/retry",
-    summary="Retry a DLQ message",
+    summary="Reintenta un mensajes DLQ",
     description="""
-    Retry a failed job from the DLQ by republishing it to the original queue.
+    Reintenta un job fallido hallado en el DLQ, republicandolo en la queue original.
     
-    The message will be reset:
-    - retry_count set to 0
+    El job sera recreado:
+    - retry_count: 0
     - error_history cleared
-    - Republished to bots/queue/{aseguradora}
+    - Republicado a bots/queue/{aseguradora}
     """
 )
 async def retry_dlq_message(
-    job_id: str = Path(..., description="Job ID to retry")
+    job_id: str = Path(..., description="Job ID a reintentar")
 ):
     """
-    Retry a DLQ message.
-    
     Args:
-        job_id: Job identifier to retry
+        job_id: Job id a reintentar
     
     Returns:
-        Success status and job_id
+        Success status y job_id
     """
     try:
         dlq_manager = get_dlq_manager()
@@ -107,20 +99,20 @@ async def retry_dlq_message(
         if not success:
             raise HTTPException(
                 status_code=404,
-                detail=f"Job {job_id} not found in DLQ"
+                detail=f"Job {job_id} no encontrado en DLQ"
             )
         
         return {
             "status": "requeued",
             "job_id": job_id,
-            "message": f"Job {job_id} has been requeued for retry"
+            "message": f"Job {job_id} ha sido republicado para reintento"
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrying DLQ message {job_id}: {e}")
+        logger.error(f"Error republicando job {job_id}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error retrying message: {str(e)}"
+            detail=f"Error reintentando job: {str(e)}"
         )

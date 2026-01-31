@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.middleware.auth import verify_token
 from app.models.responses import APIResponse, ErrorResponse
 from app.models.job import Aseguradora, Job, JobCreate, JobResponse, JobStatus
+from app.services.payload_validator import PayloadValidator, get_payload_validator
+from app.services.insurance_config import InsuranceConfigManager, get_insurance_config
 
 from mosquitto.mqtt_service import MQTTService, get_mqtt_service
 
@@ -45,7 +47,9 @@ async def crear_cotizacion(
     aseguradora: str,
     data: JobCreate,
     token: str = Depends(verify_token),
-    mqtt: MQTTService = Depends(get_mqtt_service)
+    mqtt: MQTTService = Depends(get_mqtt_service),
+    config_manager: InsuranceConfigManager = Depends(get_insurance_config),
+    validator: PayloadValidator = Depends(get_payload_validator)
 ) -> APIResponse[JobResponse]:
     """Encolar nueva tarea de cotización."""
     
@@ -63,11 +67,27 @@ async def crear_cotizacion(
             }
         )
     
-    # Crear job
+    # validar si la aseguradora esta habilitada
+    if not config_manager.is_enabled(aseg_enum):
+        config = config_manager.get_config(aseg_enum)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": f"Aseguradora '{aseguradora_lower}' no esta disponible",
+                "aseguradora": aseguradora_lower,
+                "status": "disabled",
+                "description": config.description
+            }
+        )
+    
+    # Validar payload segun esquema de aseguradora
+    validated_payload = validator.validate(aseg_enum, data.payload)
+    
+    # Crear job con payload validado
     job = Job(
         aseguradora=aseg_enum,
         in_strIDSolicitudAseguradora=data.in_strIDSolicitudAseguradora,
-        payload=data.payload
+        payload=validated_payload
     )
     
     # Publicar en MQTT

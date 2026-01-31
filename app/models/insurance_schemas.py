@@ -1,28 +1,21 @@
 """
-Insurance payload validation schemas.
-
-This module defines Pydantic models for validating insurance-specific payloads
-before queueing tasks to MQTT. Each insurance company has its own schema
-defining required and optional fields.
+Schemas para los payloads por aseguradora.
 """
 
-from pydantic import BaseModel, ConfigDict
 from typing import Dict, Type
 from app.models.job import Aseguradora
+from pydantic import BaseModel, ConfigDict
 
 
 class InsurancePayloadBase(BaseModel):
     """
-    Base model for all insurance payloads.
-    
-    Allows extra fields to be preserved in the payload.
+    Modelo base para permitir campos adicionales.
     """
     model_config = ConfigDict(extra="allow")
 
 
 
 class HDIPayload(InsurancePayloadBase):
-    """Payload schema for HDI insurance."""
     # Asesor fields
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
@@ -53,7 +46,6 @@ class HDIPayload(InsurancePayloadBase):
 
 
 class SBSPayload(InsurancePayloadBase):
-    """Payload schema for SBS insurance."""
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
@@ -68,7 +60,6 @@ class SBSPayload(InsurancePayloadBase):
 
 
 class RUNTPayload(InsurancePayloadBase):
-    """Payload schema for RUNT."""
     in_strIDSolicitudCotizadora: str
     in_strPlaca: str
     in_strTipoDoc: str
@@ -76,7 +67,6 @@ class RUNTPayload(InsurancePayloadBase):
 
 
 class SURAPayload(InsurancePayloadBase):
-    """Payload schema for SURA insurance."""
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
@@ -97,7 +87,6 @@ class SURAPayload(InsurancePayloadBase):
 
 
 class AXAPayload(InsurancePayloadBase):
-    """Payload schema for AXA COLPATRIA insurance."""
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
@@ -115,7 +104,6 @@ class AXAPayload(InsurancePayloadBase):
 
 
 class ALLIANZPayload(InsurancePayloadBase):
-    """Payload schema for ALLIANZ insurance."""
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
     in_strTipoDoc: str
@@ -137,7 +125,6 @@ class ALLIANZPayload(InsurancePayloadBase):
 
 
 class BOLIVARPayload(InsurancePayloadBase):
-    """Payload schema for BOLIVAR insurance."""
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
     in_strTipoDoc: str
@@ -156,7 +143,6 @@ class BOLIVARPayload(InsurancePayloadBase):
 
 
 class EQUIDADPayload(InsurancePayloadBase):
-    """Payload schema for EQUIDAD insurance."""
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
@@ -178,7 +164,6 @@ class EQUIDADPayload(InsurancePayloadBase):
 
 
 class MUNDIALPayload(InsurancePayloadBase):
-    """Payload schema for MUNDIAL insurance."""
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
@@ -198,7 +183,6 @@ class MUNDIALPayload(InsurancePayloadBase):
 
 
 class SOLIDARIAPayload(InsurancePayloadBase):
-    """Payload schema for SOLIDARIA insurance."""
     in_strTipoIdentificacionAsesorUsuario: str
     in_strUsuarioAsesor: str
     in_strContrasenaAsesor: str
@@ -213,7 +197,7 @@ class SOLIDARIAPayload(InsurancePayloadBase):
     in_strClaseVehiculo: str
 
 
-# Schema registry mapping insurance companies to their validation schemas
+# Schema registry
 INSURANCE_SCHEMAS: Dict[Aseguradora, Type[InsurancePayloadBase]] = {
     Aseguradora.HDI: HDIPayload,
     Aseguradora.SBS: SBSPayload,
