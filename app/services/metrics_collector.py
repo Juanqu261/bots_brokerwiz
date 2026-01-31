@@ -114,7 +114,7 @@ class MetricsCollector:
         
         # todas las metricas
         metrics = SystemMetrics(
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now().isoformat() + "Z",
             services=await self._get_service_status(),
             queue=await self._get_queue_metrics(),
             activity_24h=self._get_activity_metrics(),
@@ -202,7 +202,9 @@ class MetricsCollector:
         try:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory_percent = psutil.virtual_memory().percent
-            disk_percent = psutil.disk_usage('/').percent
+            # Usar la raíz adecuada según el sistema operativo
+            disk_root = str(Path.home().anchor)
+            disk_percent = psutil.disk_usage(disk_root).percent
             chrome_processes = self._count_chrome_processes()
             
             return ResourceMetrics(
