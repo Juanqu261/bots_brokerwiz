@@ -56,7 +56,7 @@ class DLQManager:
                     hostname=settings.mqtt.MQTT_HOST,
                     port=settings.mqtt.MQTT_PORT,
                     identifier="dlq-manager",
-                    clear_session=False
+                    clean_session=False
                 ) as client:
                     # Subscribe to all DLQ topics
                     await client.subscribe("bots/dlq/#")
