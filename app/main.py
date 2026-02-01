@@ -42,16 +42,14 @@ async def lifespan(app: FastAPI):
         mqtt = get_mqtt_service()
         logger.info(f"MQTT conectado: {mqtt.client_id}")
         
-        # Iniciar DLQ manager
-        from app.services.dlq_manager import get_dlq_manager
-        dlq_manager = get_dlq_manager()
-        await dlq_manager.start()
-        logger.info("DLQ manager iniciado")
+        # Iniciar DLQ manager solo en worker 0 (principal)
+        from app.services.dlq_manager import ensure_dlq_started, ensure_dlq_stopped
+        await ensure_dlq_started()
         
         yield  # La aplicación corre aquí
         
         # Detener DLQ manager
-        await dlq_manager.stop()
+        await ensure_dlq_stopped()
         logger.info("DLQ manager detenido")
         
     logger.info("BrokerWiz API detenida")

@@ -55,7 +55,8 @@ class DLQManager:
                 async with aiomqtt.Client(
                     hostname=settings.mqtt.MQTT_HOST,
                     port=settings.mqtt.MQTT_PORT,
-                    identifier="dlq-manager"
+                    identifier="dlq-manager",
+                    clear_session=False
                 ) as client:
                     # Subscribe to all DLQ topics
                     await client.subscribe("bots/dlq/#")
@@ -197,6 +198,7 @@ class DLQManager:
 
 # Global DLQ manager instance
 _dlq_manager: Optional[DLQManager] = None
+_dlq_started = False
 
 
 def get_dlq_manager() -> DLQManager:
@@ -205,3 +207,23 @@ def get_dlq_manager() -> DLQManager:
     if _dlq_manager is None:
         _dlq_manager = DLQManager()
     return _dlq_manager
+
+
+async def ensure_dlq_started() -> None:
+    """Ensure DLQ manager is started only once across all workers."""
+    global _dlq_started
+    if not _dlq_started:
+        dlq = get_dlq_manager()
+        await dlq.start()
+        _dlq_started = True
+        logger.info("DLQ manager started (singleton)")
+
+
+async def ensure_dlq_stopped() -> None:
+    """Stop DLQ manager."""
+    global _dlq_started
+    if _dlq_started:
+        dlq = get_dlq_manager()
+        await dlq.stop()
+        _dlq_started = False
+        logger.info("DLQ manager stopped")
