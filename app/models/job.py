@@ -39,13 +39,15 @@ class JobCreate(BaseModel):
     """
     Payload para crear un nuevo job de cotización.
     
-    El JSON de entrada usa los nombres estándar de la API de bots:
-    - in_strIDSolicitudAseguradora: ID de la solicitud
-    - Resto de campos: datos específicos del bot
+    Acepta dos formatos:
+    1. Plano (recomendado): todos los campos al mismo nivel
+       {"in_strIDSolicitudAseguradora": "abc123", "in_strNumDoc": "123", ...}
+    
+    2. Anidado: con payload separado
+       {"in_strIDSolicitudAseguradora": "abc123", "payload": {...}}
     """
     in_strIDSolicitudAseguradora: str = Field(
         ...,
-        alias="in_strIDSolicitudAseguradora",
         description="ID único de la solicitud (viene del sistema externo)",
         examples=["abc123xyz"]
     )
@@ -55,7 +57,8 @@ class JobCreate(BaseModel):
     )
     
     model_config = {
-        "populate_by_name": True,  # Permite usar tanto el alias como el nombre
+        "extra": "allow",  # Permite campos adicionales
+        "populate_by_name": True,
         "json_schema_extra": {
             "example": {
                 "in_strIDSolicitudAseguradora": "abc123xyz",
@@ -72,14 +75,20 @@ class JobCreate(BaseModel):
         """
         Extrae in_strIDSolicitudAseguradora y agrupa el resto en payload.
         
-        Esto permite enviar un JSON plano como en el documento de integración.
+        Permite enviar JSON plano o anidado:
+        - Plano: {"in_strIDSolicitudAseguradora": "id", "in_strNumDoc": "123", ...}
+        - Anidado: {"in_strIDSolicitudAseguradora": "id", "payload": {...}}
         """
+        # Extraer ID de solicitud
         solicitud_id = data.pop("in_strIDSolicitudAseguradora", None)
         
-        # Todo lo que no sea el ID va al payload
-        payload = data.pop("payload", {})
-        # Agregar campos adicionales al payload
-        payload.update({k: v for k, v in data.items()})
+        # Si ya hay payload, usarlo; si no, crear uno con los campos restantes
+        if "payload" in data:
+            payload = data.pop("payload", {})
+        else:
+            # Todos los campos restantes van al payload
+            payload = data.copy()
+            data.clear()
         
         super().__init__(
             in_strIDSolicitudAseguradora=solicitud_id,
