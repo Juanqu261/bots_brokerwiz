@@ -76,11 +76,10 @@ autosave_interval 60
 # ------------------------------------------------------------------------------
 # max_queued_messages: Mensajes en cola por cliente (QoS 1/2)
 #   - Afecta workers desconectados con sesión persistente
-#   - 10000 permite ~10k tareas pendientes por worker
-max_queued_messages 10000
+#   - 100 permite ~100 tareas pendientes por worker
+max_queued_messages 100
 
 # max_inflight_messages: Mensajes simultáneos en tránsito (sin ACK)
-#   - Para workers Selenium que procesan secuencialmente, 20 es suficiente
 max_inflight_messages 20
 
 # max_queued_bytes: Límite de memoria por cola (0 = sin límite de bytes)

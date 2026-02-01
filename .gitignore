@@ -129,3 +129,4 @@ db.sqlite3
 
 # Redis
 dump.rdb
+manual-deploy.md
