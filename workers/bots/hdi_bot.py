@@ -86,7 +86,7 @@ class HDIBot(BaseBot):
             
         except Exception as e:
             self.logger.exception(f"Error inesperado en HDIBot: {e}")
-            await self.report_error("BOT_EXCEPTION", str(e), severity="CRITICAL")
+            await self.report_error("BOT_EXCEPTION", str(e), severity="ERROR")
             return False
     
     # === Métodos privados del flujo ===

@@ -132,18 +132,33 @@ class AppWebClient:
     ) -> bool:
         """
         Reportar error al endpoint de errores.
+        
+        Formato esperado por API:
+        {
+            "solicitudAseguradoraId": string,
+            "aseguradora": string,
+            "hasError": boolean,
+            "errorCode": string,
+            "severity": string,
+            "message": string
+        }
 
         Args:
-            solicitud_aseguradora_id: ID de la solicitud
-            aseguradora: Nombre del bot en MAYÚSCULAS (ej: "HDI", "SURA", "RUNT")
+            solicitud_aseguradora_id: ID de la solicitud (mismo que ingresa al bot)
+            aseguradora: Nombre del bot en MAYÚSCULAS (ej: "HDI", "SBS", "RUNT")
             error_code: Código de error (ej: "LOGIN_FAILED", "TIMEOUT")
             message: Descripción del error
-            severity: "ERROR" | "WARNING" | "CRITICAL"
+            severity: "ERROR" o "WARNING"
         
         Returns:
             True si se reportó exitosamente
         """
         url = f"{self.base_url}{self.ERRORS_ENDPOINT}"
+        
+        # Validar severity - API solo acepta ERROR o WARNING
+        if severity not in ("ERROR", "WARNING"):
+            logger.warning(f"Severity '{severity}' inválido, usando 'ERROR'")
+            severity = "ERROR"
         
         payload = {
             "solicitudAseguradoraId": solicitud_aseguradora_id,

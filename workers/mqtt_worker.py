@@ -253,12 +253,13 @@ async def handle_bot_failure(
             f"Enviando a DLQ (tipo={error_type.value}, código={error_code})"
         )
         
-        # Reportar error a la API en producción
+        # Reportar error a la API en producción - SOLO UNA VEZ al DLQ
+        # (no en cada reintento fallido)
         if settings.general.ENVIRONMENT == "production":
             await bot.report_error(
                 error_code=error_code,
                 message=str(exception),
-                severity="CRITICAL"
+                severity="ERROR"
             )
         
         await retry_manager.send_to_dlq(message, aseguradora)

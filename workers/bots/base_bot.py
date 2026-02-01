@@ -197,7 +197,7 @@ class BaseBot:
         Args:
             error_code: Código de error (ej: "LOGIN_FAILED", "TIMEOUT")
             message: Descripción del error
-            severity: "ERROR" | "WARNING" | "CRITICAL"
+            severity: "ERROR" | "WARNING" (la API valida estos valores)
             take_screenshot: Capturar pantalla antes de reportar
         """
         if take_screenshot and self._setup_done:
