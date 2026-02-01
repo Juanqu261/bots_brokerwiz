@@ -40,8 +40,8 @@ echo "Job ID: $JOB_ID"
 # Worker procesando
 ./scripts/worker.sh logs | grep $JOB_ID
 
-# MQTT encolado
-sudo tail -50 /var/log/mosquitto/mosquitto.log
+# Bot
+tail -f logs/bots/{aseguradora}/{job_id}/bot.log
 ```
 
 ## 3. Monitoreo en Tiempo Real
@@ -53,16 +53,6 @@ tail -f logs/api.log logs/worker-*.log | grep $JOB_ID
 # O status general
 ./scripts/worker.sh status
 ```
-
-## 4. Resultados Esperados
-
-| Etapa | Log | Resultado |
-|-------|-----|-----------|
-| **API** | `Job abc123 encolado` | ✅ Recibido |
-| **MQTT** | `bots/queue/sbs` | ✅ Publicado |
-| **Worker** | `Recibido job: abc123` | ✅ Procesando |
-| **Bot** | `completado exitosamente` | ✅ Éxito |
-| **Error** | `completado con errores` | ⚠️ Fallo (DLQ) |
 
 ## 5. Script Automatizado
 
@@ -88,10 +78,4 @@ sleep 5
 
 echo "Workers:"
 ./scripts/worker.sh logs | grep $JOB_ID | tail -5
-```
-
-Guardar como `test-request.sh` y ejecutar:
-```bash
-chmod +x test-request.sh
-./test-request.sh
 ```
