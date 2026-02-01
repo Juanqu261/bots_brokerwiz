@@ -32,8 +32,10 @@ async def lifespan(app: FastAPI):
     """
     Lifespan manager de FastAPI.
     
-    - Startup: Conecta el cliente MQTT singleton y DLQ manager
+    - Startup: Conecta el cliente MQTT singleton
     - Shutdown: Desconecta limpiamente
+    
+    Nota: DLQ manager deshabilitado temporalmente (error de conexión MQTT)
     """
     logger.info("Iniciando BrokerWiz API...")
     
@@ -42,15 +44,13 @@ async def lifespan(app: FastAPI):
         mqtt = get_mqtt_service()
         logger.info(f"MQTT conectado: {mqtt.client_id}")
         
-        # Iniciar DLQ manager solo en worker 0 (principal)
-        from app.services.dlq_manager import ensure_dlq_started, ensure_dlq_stopped
-        await ensure_dlq_started()
+        # DLQ manager deshabilitado temporalmente
+        # from app.services.dlq_manager import ensure_dlq_started, ensure_dlq_stopped
+        # await ensure_dlq_started()
         
         yield  # La aplicación corre aquí
         
-        # Detener DLQ manager
-        await ensure_dlq_stopped()
-        logger.info("DLQ manager detenido")
+        # await ensure_dlq_stopped()
         
     logger.info("BrokerWiz API detenida")
 
