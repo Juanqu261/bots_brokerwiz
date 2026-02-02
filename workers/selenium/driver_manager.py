@@ -23,6 +23,12 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
+try:
+    import undetected_chromedriver as uc
+    UNDETECTED_AVAILABLE = True
+except ImportError:
+    UNDETECTED_AVAILABLE = False
+
 from config.settings import settings
 from workers.selenium.cookies_manager import CookiesManager
 from workers.selenium.helpers import SeleniumHelpers
@@ -107,9 +113,19 @@ class SeleniumDriverManager(SeleniumHelpers):
     
     def _create_driver_sync(self) -> webdriver.Chrome:
         """Creación síncrona del driver (ejecutada en thread)."""
+        # Preferir undetected-chromedriver si está disponible (evita bloqueos de Cloudflare)
+        if UNDETECTED_AVAILABLE:
+            logger.info(f"[{self.bot_id}] Usando undetected-chromedriver para evitar bloqueos de Cloudflare")
+            return self._create_undetected_driver()
+        else:
+            logger.info(f"[{self.bot_id}] Usando chromedriver estándar (instala 'undetected-chromedriver' para mejor compatibilidad)")
+            return self._create_standard_driver()
+    
+    def _create_undetected_driver(self) -> webdriver.Chrome:
+        """Crear driver con undetected-chromedriver (evita detección de bots)."""
         options = Options()
         
-        # Headless en producción, visible en desarrollo/test para debugging
+        # Headless en producción
         is_production = settings.general.ENVIRONMENT == "production"
         if is_production:
             options.add_argument("--headless=new")
@@ -120,10 +136,59 @@ class SeleniumDriverManager(SeleniumHelpers):
         for arg in self.CHROME_ARGS_BASE:
             options.add_argument(arg)
         
-        # Agregar User-Agent dinámico según SO
+        # User-Agent dinámico
         user_agent = self._get_user_agent()
         options.add_argument(f"--user-agent={user_agent}")
-        logger.debug(f"[{self.bot_id}] User-Agent: {user_agent} (Sistema: {platform.system()})")
+        logger.debug(f"[{self.bot_id}] User-Agent: {user_agent}")
+        
+        # Preferencias de descarga
+        prefs = {
+            "credentials_enable_service": False,
+            "profile.password_manager_enabled": False,
+            "download.default_directory": str(self.TEMP_PDF_DIR.absolute()),
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": False,
+            "plugins.always_open_pdf_externally": True,
+            "profile.default_content_setting_values.notifications": 2,
+        }
+        options.add_experimental_option("prefs", prefs)
+        
+        try:
+            # Crear driver con undetected-chromedriver
+            driver = uc.Chrome(options=options, version_main=None, suppress_welcome=True)
+            
+            driver.implicitly_wait(self.IMPLICIT_TIMEOUT)
+            driver.set_page_load_timeout(self.PAGE_LOAD_TIMEOUT)
+            driver.set_script_timeout(self.SCRIPT_TIMEOUT)
+            
+            # Inyectar headers
+            self._inject_headers(driver)
+            
+            logger.debug(f"[{self.bot_id}] Driver undetected creado exitosamente")
+            return driver
+        
+        except Exception as e:
+            logger.warning(f"[{self.bot_id}] Error con undetected-chromedriver: {e}, usando estándar")
+            return self._create_standard_driver()
+    
+    def _create_standard_driver(self) -> webdriver.Chrome:
+        """Crear driver estándar de Selenium (fallback)."""
+        options = Options()
+        
+        is_production = settings.general.ENVIRONMENT == "production"
+        if is_production:
+            options.add_argument("--headless=new")
+            logger.debug(f"[{self.bot_id}] Chrome en modo headless (production)")
+        else:
+            logger.info(f"[{self.bot_id}] Chrome en modo visible (ENVIRONMENT={settings.general.ENVIRONMENT})")
+        
+        for arg in self.CHROME_ARGS_BASE:
+            options.add_argument(arg)
+        
+        user_agent = self._get_user_agent()
+        options.add_argument(f"--user-agent={user_agent}")
+        logger.debug(f"[{self.bot_id}] User-Agent: {user_agent}")
         
         prefs = {
             "credentials_enable_service": False,
@@ -151,9 +216,10 @@ class SeleniumDriverManager(SeleniumHelpers):
             {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"}
         )
         
-        # Inyectar headers HTTP para evitar bloqueos de Cloudflare/WAF
+        # Inyectar headers
         self._inject_headers(driver)
         
+        logger.debug(f"[{self.bot_id}] Driver estándar creado exitosamente")
         return driver
     
     def _inject_headers(self, driver: webdriver.Chrome) -> None:

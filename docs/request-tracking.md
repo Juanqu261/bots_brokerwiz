@@ -42,6 +42,10 @@ echo "Job ID: $JOB_ID"
 
 # Bot
 tail -f logs/bots/{aseguradora}/{job_id}/bot.log
+
+# Descargar screenshots
+scp -r abidata@server:~/bots_brokerwiz/logs/bots/{aseguradora}/{job_id}/screeshots ./screenshots/
+
 ```
 
 ## 3. Monitoreo en Tiempo Real
