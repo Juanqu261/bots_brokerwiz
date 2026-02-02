@@ -253,8 +253,7 @@ async def handle_bot_failure(
             f"Enviando a DLQ (tipo={error_type.value}, código={error_code})"
         )
         
-        # Reportar error a la API en producción - SOLO UNA VEZ al DLQ
-        # (no en cada reintento fallido)
+        # Reportar error a la API en producción
         if settings.general.ENVIRONMENT == "production":
             await bot.report_error(
                 error_code=error_code,

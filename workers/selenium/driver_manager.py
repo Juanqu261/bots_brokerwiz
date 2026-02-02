@@ -13,6 +13,7 @@ Uso:
 
 import asyncio
 import logging
+import platform
 import time
 from pathlib import Path
 from typing import Optional
@@ -50,8 +51,20 @@ class SeleniumDriverManager(SeleniumHelpers):
         "--window-size=1920,1080",
         "--start-maximized",
         # "--incognito",
-        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     ]
+    
+    @staticmethod
+    def _get_user_agent() -> str:
+        """
+        Obtener User-Agent según el SO para evitar bloqueos por plataforma.
+        
+        Returns:
+            User-Agent string apropiado para Windows/Linux
+        """
+        if platform.system() == "Linux":
+            return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        else:  # Windows, Darwin (Mac)
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     
     # Timeouts
     IMPLICIT_TIMEOUT = 15
@@ -106,6 +119,11 @@ class SeleniumDriverManager(SeleniumHelpers):
         
         for arg in self.CHROME_ARGS_BASE:
             options.add_argument(arg)
+        
+        # Agregar User-Agent dinámico según SO
+        user_agent = self._get_user_agent()
+        options.add_argument(f"--user-agent={user_agent}")
+        logger.debug(f"[{self.bot_id}] User-Agent: {user_agent} (Sistema: {platform.system()})")
         
         prefs = {
             "credentials_enable_service": False,
