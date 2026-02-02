@@ -151,7 +151,49 @@ class SeleniumDriverManager(SeleniumHelpers):
             {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"}
         )
         
+        # Inyectar headers HTTP para evitar bloqueos de Cloudflare/WAF
+        self._inject_headers(driver)
+        
         return driver
+    
+    def _inject_headers(self, driver: webdriver.Chrome) -> None:
+        """
+        Inyectar headers HTTP que evitan bloqueos de Cloudflare.
+        Esto engaña al WAF para que no detecte el bot.
+        """
+        headers = {
+            "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "DNT": "1",
+            "Referer": "https://www.google.com/",
+            "Sec-Ch-Ua": '"Not A(Brand";v="99", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Linux"' if platform.system() == "Linux" else '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        
+        try:
+            # Usar CDP para inyectar headers en todas las peticiones
+            driver.execute_cdp_cmd("Network.enable", {})
+            driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+                "userAgent": self._get_user_agent()
+            })
+            
+            # Inyectar headers por defecto
+            for key, value in headers.items():
+                driver.execute_cdp_cmd(
+                    "Network.setExtraHTTPHeaders",
+                    {"headers": {key: value}}
+                )
+            
+            logger.debug(f"[{self.bot_id}] Headers HTTP inyectados para evitar WAF")
+        except Exception as e:
+            logger.warning(f"[{self.bot_id}] No se pudieron inyectar headers: {e}")
     
     async def quit(self) -> None:
         """Cerrar driver y limpiar recursos."""
