@@ -266,11 +266,14 @@ class CaptchaHandler:
                                 timeout=5
                             )
                             
-                            self.logger.info(f"✅ Captcha validado y botón disponible: {captcha_text}")
+                            self.logger.info(f"Captcha validado y botón disponible: {captcha_text}")
                             return captcha_text
                             
                         except Exception as e:
                             self.logger.warning(f"Error en validación de captcha: {e}")
+                            
+                            # Reportar captcha como incorrecto a 2Captcha
+                            await self.report_captcha_incorrect(api_key, current_task_id)
                             
                             if retry_count >= max_retries:
                                 self.logger.error(f"Se alcanzó el máximo de reintentos ({max_retries})")
@@ -297,6 +300,9 @@ class CaptchaHandler:
                             f"Captcha con longitud incorrecta: '{captcha_text}' "
                             f"(esperado: 6, obtenido: {len(captcha_text)})"
                         )
+                        
+                        # Reportar captcha como incorrecto a 2Captcha
+                        await self.report_captcha_incorrect(api_key, current_task_id)
                         
                         if retry_count >= max_retries:
                             self.logger.error(f"Se alcanzó el máximo de reintentos ({max_retries})")
@@ -385,6 +391,50 @@ class CaptchaHandler:
         except Exception as e:
             self.logger.error(f"Error regenerando captcha: {e}")
             return None
+    
+    async def report_captcha_incorrect(
+        self,
+        api_key: str,
+        task_id: int
+    ) -> bool:
+        """
+        Reportar a 2Captcha que el captcha resuelto era incorrecto.
+        
+        2Captcha puede reembolsar créditos en algunos casos y usa esta info
+        para mejorar su servicio.
+        
+        Args:
+            api_key: API key de 2Captcha
+            task_id: ID de la tarea a reportar como incorrecta
+        
+        Returns:
+            True si el reporte fue exitoso, False si falló
+        """
+        try:
+            url = "https://api.2captcha.com/reportIncorrect"
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    json={
+                        "clientKey": api_key,
+                        "taskId": task_id
+                    }
+                )
+                result = response.json()
+            
+            # errorId == 0 significa éxito
+            if result.get("errorId", 0) != 0:
+                error_desc = result.get("errorDescription", "Error desconocido")
+                self.logger.debug(f"No se pudo reportar captcha incorrecto: {error_desc}")
+                return False
+            
+            self.logger.info(f"Captcha reportado como incorrecto (taskId={task_id})")
+            return True
+            
+        except Exception as e:
+            self.logger.debug(f"Error reportando captcha incorrecto: {e}")
+            return False
     
     async def resolve_captcha(
         self,
