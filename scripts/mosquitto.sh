@@ -49,56 +49,39 @@ cmd_setup() {
     chown mosquitto:mosquitto $MOSQUITTO_DATA
     chmod 755 "$BROKERWIZ_LOGS"
 
-    cat > /etc/mosquitto/conf.d/brokerwiz.conf <<EOF
+    # Respaldar configuración por defecto
+    if [ ! -f /etc/mosquitto/mosquitto.conf.original ]; then
+        sudo cp /etc/mosquitto/mosquitto.conf /etc/mosquitto/mosquitto.conf.original
+    fi
+
+    # Crear configuración completa y autosuficiente (sin conflictos)
+    cat > /etc/mosquitto/mosquitto.conf <<EOF
 # ============================================================================
-# BrokerWiz - Mosquitto MQTT Broker Configuration
+# BrokerWiz - Mosquitto MQTT Broker Configuration (Completa y Autosuficiente)
 # ============================================================================
 # Arquitectura: API → MQTT → Workers (Shared Subscriptions)
 # Requiere: Mosquitto 2.0+ para soporte de MQTT 5 y Shared Subscriptions
 # ============================================================================
 
-# ------------------------------------------------------------------------------
-# Listener principal
-# ------------------------------------------------------------------------------
+# Puertos de escucha
 listener 1883 0.0.0.0
 allow_anonymous true
 
-# ------------------------------------------------------------------------------
-# Persistencia - Recuperar mensajes tras reinicio del broker
-# Nota: persistence_location ya está definida en mosquitto.conf
-# Solo definimos opciones adicionales
-# ------------------------------------------------------------------------------
+# Persistencia
 persistence true
+persistence_location ${MOSQUITTO_DATA}/
+persistence_file mosquitto.db
 autosave_interval 60
 
-# ------------------------------------------------------------------------------
-# Límites de colas y mensajes
-# ------------------------------------------------------------------------------
-# max_queued_messages: Mensajes en cola por cliente (QoS 1/2)
-#   - Afecta workers desconectados con sesión persistente
-#   - 100 permite ~100 tareas pendientes por worker
+# Límites de colas
 max_queued_messages 100
-
-# max_inflight_messages: Mensajes simultáneos en tránsito (sin ACK)
 max_inflight_messages 20
-
-# max_queued_bytes: Límite de memoria por cola (0 = sin límite de bytes)
 max_queued_bytes 0
 
-# ------------------------------------------------------------------------------
-# Timeouts y Keep-Alive
-# ------------------------------------------------------------------------------
-# keepalive_interval: Segundos entre pings cliente-broker (0 = usar del cliente)
-#keepalive_interval 60
-
-# persistent_client_expiration: Tiempo para limpiar sesiones huérfanas
-#   - Workers con client_id fijo mantienen sesión entre reinicios
-#   - 1d = limpiar si no reconecta en 1 día
+# Keep-Alive
 persistent_client_expiration 1d
 
-# ------------------------------------------------------------------------------
 # Logs
-# ------------------------------------------------------------------------------
 log_dest file ${BROKERWIZ_LOGS}/mosquitto.log
 log_dest stdout
 log_type error
@@ -110,14 +93,8 @@ log_type unsubscribe
 log_timestamp true
 log_timestamp_format %Y-%m-%d %H:%M:%S
 
-# ------------------------------------------------------------------------------
-# Notas sobre Shared Subscriptions (MQTT 5)
-# ------------------------------------------------------------------------------
-# Mosquitto 2.0+ soporta shared subscriptions automáticamente.
-# Los workers se suscriben a: \$share/workers/bots/queue/+
-# El broker distribuye mensajes round-robin entre workers del grupo.
-# No requiere configuración adicional, solo Mosquitto 2.x.
-# ------------------------------------------------------------------------------
+# Seguridad básica
+acl_file /etc/mosquitto/aclfile
 EOF
 
     # Configurar logrotate para Mosquitto (rotación diaria, mantener 1 día)
