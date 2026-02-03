@@ -92,9 +92,6 @@ log_type subscribe
 log_type unsubscribe
 log_timestamp true
 log_timestamp_format %Y-%m-%d %H:%M:%S
-
-# Seguridad básica
-acl_file /etc/mosquitto/aclfile
 EOF
 
     # Configurar logrotate para Mosquitto (rotación diaria, mantener 1 día)
