@@ -109,10 +109,24 @@ ${BROKERWIZ_LOGS}/mosquitto.log {
 }
 EOF
 
-    # Dar permisos a mosquitto para escribir en logs
+    # Dar permisos ANTES de que mosquitto lo escriba
+    mkdir -p "$BROKERWIZ_LOGS"
     touch "$BROKERWIZ_LOGS/mosquitto.log"
-    chown mosquitto:mosquitto "$BROKERWIZ_LOGS/mosquitto.log"
+    sudo chown mosquitto:mosquitto "$BROKERWIZ_LOGS/mosquitto.log" 2>/dev/null || true
+    sudo chmod 700 "$BROKERWIZ_LOGS/mosquitto.log" 2>/dev/null || true
 
+    # Actualizar servicio systemd 
+    # Type=simple porque mosquitto 2.0 compilado no tiene notify support
+    mkdir -p /etc/systemd/system/mosquitto.service.d
+    cat > /etc/systemd/system/mosquitto.service.d/override.conf <<'SVCEOF'
+[Service]
+Type=simple
+TimeoutStartSec=0
+Restart=on-failure
+RestartSec=5
+SVCEOF
+
+    systemctl daemon-reload
     systemctl enable mosquitto
     systemctl restart mosquitto
 
