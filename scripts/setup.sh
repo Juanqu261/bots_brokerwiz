@@ -32,21 +32,55 @@ echo "╚═══════════════════════�
 echo ""
 
 # ============================================================================
-# 1. Verificar Python
+# 1. Verificar Python 3.12
 # ============================================================================
 
-log_info "Verificando Python..."
+log_info "Verificando Python 3.12..."
+
+# Función para validar versión de Python
+validate_python_version() {
+    local python_cmd=$1
+    local version=$($python_cmd --version 2>&1 | grep -oP '\d+\.\d+')
+    
+    if [[ "$version" == "3.12" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Buscar Python 3.12
+PYTHON_CMD=""
 
 if command -v python3.12 &>/dev/null; then
-    PYTHON_CMD="python3.12"
-elif command -v python3 &>/dev/null; then
-    PYTHON_CMD="python3"
-else
-    log_err "Python 3 no encontrado. Instalar con: sudo apt install python3.12 python3.12-venv"
+    if validate_python_version "python3.12"; then
+        PYTHON_CMD="python3.12"
+    fi
+fi
+
+# Si no encontró python3.12, validar python3 (debe ser 3.12)
+if [ -z "$PYTHON_CMD" ] && command -v python3 &>/dev/null; then
+    if validate_python_version "python3"; then
+        PYTHON_CMD="python3"
+    else
+        CURRENT_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+')
+        log_err "python3 encontrado pero versión es $CURRENT_VERSION. Se requiere 3.12"
+    fi
+fi
+
+# Si aún no encontró Python válido
+if [ -z "$PYTHON_CMD" ]; then
+    log_err "Python 3.12 no encontrado. Instalar con:"
+    echo ""
+    echo "  En Ubuntu/Debian:"
+    echo "    sudo apt update"
+    echo "    sudo apt install python3.12 python3.12-venv"
+    echo ""
+    echo "  O descarga desde: https://www.python.org/downloads/"
+    echo ""
     exit 1
 fi
 
-PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | grep -oP '\d+\.\d+')
 log_ok "Python encontrado: $($PYTHON_CMD --version)"
 
 # ============================================================================

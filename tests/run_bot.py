@@ -24,7 +24,7 @@ configure_event_loop()
 # Payloads de prueba - EXACTAMENTE como en bot_executor.py
 BOT_PAYLOADS = {
     "sbs": {
-        "in_strIDSolicitudAseguradora": "u68KETrjE6wdyrz5oa9o2",
+        "in_strIDSolicitudAseguradora": "TEST-SBS-001",
         "in_strTipoIdentificacionAsesorUsuario": "string",
         "in_strUsuarioAsesor": os.getenv("SBS_USUARIO"),
         "in_strContrasenaAsesor": os.getenv("SBS_CONTRASENA"),
