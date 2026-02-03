@@ -65,10 +65,10 @@ allow_anonymous true
 
 # ------------------------------------------------------------------------------
 # Persistencia - Recuperar mensajes tras reinicio del broker
+# Nota: persistence_location ya está definida en mosquitto.conf
+# Solo definimos opciones adicionales
 # ------------------------------------------------------------------------------
 persistence true
-persistence_location ${MOSQUITTO_DATA}/
-persistence_file mosquitto.db
 autosave_interval 60
 
 # ------------------------------------------------------------------------------
