@@ -34,7 +34,7 @@ class ResourceManager:
     """Gestiona recursos del sistema para limitar ejecución de bots."""
     
     # Valores por defecto
-    DEFAULT_MAX_CPU = 75.0  # Porcentaje máximo de CPU
+    DEFAULT_MAX_CPU = 85.0  # Porcentaje máximo de CPU
     DEFAULT_MAX_MEMORY = 85.0  # Porcentaje máximo de RAM
     
     def __init__(

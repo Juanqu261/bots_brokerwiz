@@ -17,7 +17,7 @@ router = APIRouter(tags=["Health"])
 
 # Cache del estado de MQTT para evitar pings excesivos
 _mqtt_status_cache = {
-    "is_alive": False,
+    "is_alive": None,  # None = desconocido, fuerza ping real en primer check
     "last_check": 0.0,
     "ttl": 30.0  # Segundos entre verificaciones reales
 }
@@ -25,7 +25,7 @@ _mqtt_status_cache = {
 
 def reset_mqtt_cache():
     """Resetear caché de MQTT (útil para tests)."""
-    _mqtt_status_cache["is_alive"] = False
+    _mqtt_status_cache["is_alive"] = None  # None fuerza ping real en próximo check
     _mqtt_status_cache["last_check"] = 0.0
     _mqtt_status_cache["ttl"] = 30.0
 
@@ -35,7 +35,7 @@ async def _get_mqtt_status(mqtt: MQTTService) -> bool:
     Obtener estado de MQTT con caché.
     
     - Si el caché es válido (< TTL segundos), retorna el valor cacheado
-    - Si expiró, hace ping real y actualiza el caché
+    - Si caché es None (desconocido), o expiró, hace ping real y actualiza
     
     Esto evita que múltiples requests hagan ping simultáneamente
     y que cada health check tome 3s cuando MQTT está caído.
@@ -43,28 +43,29 @@ async def _get_mqtt_status(mqtt: MQTTService) -> bool:
     now = time.time()
     cache = _mqtt_status_cache
     
-    # Si el caché es válido, retornar valor cacheado
-    if (now - cache["last_check"]) < cache["ttl"]:
-        return cache["is_alive"]
+    # Si caché es None (desconocido) o expiró, hacer ping real
+    if cache["is_alive"] is None or (now - cache["last_check"]) >= cache["ttl"]:
+        # Hacer ping real
+        is_alive = await mqtt.ping(timeout=3.0)
+        
+        # Actualizar caché
+        cache["is_alive"] = is_alive
+        cache["last_check"] = now
+        
+        # Si está caído, reducir TTL para detectar recuperación más rápido
+        cache["ttl"] = 5.0 if not is_alive else 30.0
+        
+        return is_alive
     
-    # Caché expirado: hacer ping real
-    is_alive = await mqtt.ping(timeout=3.0)
-    
-    # Actualizar caché
-    cache["is_alive"] = is_alive
-    cache["last_check"] = now
-    
-    # Si está caído, reducir TTL para detectar recuperación más rápido
-    cache["ttl"] = 5.0 if not is_alive else 30.0
-    
-    return is_alive
+    # Caché válido y conocido: retornar sin ping
+    return cache["is_alive"]
 
 
 @router.get(
     "/health",
     response_model=HealthResponse,
     summary="Health check",
-    description="Verifica el estado del servicio y la conexión con MQTT (con caché de 10s)."
+    description="Verifica el estado del servicio y la conexión con MQTT (con caché de 30s)."
 )
 async def health_check(
     mqtt: MQTTService = Depends(get_mqtt_service)
